@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Amiri } from "next/font/google";
+import { Inter, Amiri, Amiri_Quran } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { BookmarksProvider } from "@/lib/bookmark-context";
@@ -13,6 +13,13 @@ const amiri = Amiri({
   subsets: ["arabic", "latin"],
   weight: ["400", "700"],
   variable: "--font-amiri",
+});
+
+// Font khusus bacaan Al-Qur'an (bentuk glyph sesuai teks Uthmani)
+const amiriQuran = Amiri_Quran({
+  subsets: ["arabic"],
+  weight: "400",
+  variable: "--font-amiri-quran",
 });
 
 // Ganti dengan domain produksi (atau set env NEXT_PUBLIC_SITE_URL) saat launch
@@ -48,7 +55,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className={`${inter.variable} ${amiri.variable}`}>
+    <html
+      lang="id"
+      className={`${inter.variable} ${amiri.variable} ${amiriQuran.variable}`}
+    >
         <body className="font-sans antialiased">
         <AuthProvider>
           <BookmarksProvider>{children}</BookmarksProvider>

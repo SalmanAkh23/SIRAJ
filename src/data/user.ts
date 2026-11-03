@@ -2,6 +2,9 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  username?: string;
+  phone?: string;
+  joinedAt?: string;
   avatar?: string;
   stats: {
     materiCompleted: number;
@@ -25,6 +28,9 @@ export const mockUser: User = {
   id: "user-1",
   name: "Ahmad Fauzi",
   email: "ahmad.fauzi@email.com",
+  username: "ahmadfauzi",
+  phone: "",
+  joinedAt: "2024-01-15",
   stats: {
     materiCompleted: 12,
     quizCompleted: 5,

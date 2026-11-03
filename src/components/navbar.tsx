@@ -8,6 +8,7 @@ import Logo from "@/components/logo";
 
 const navLinks = [
   { href: "/", label: "Beranda" },
+  { href: "/jadwal-salat", label: "Jadwal Salat" },
   { href: "/quran", label: "Al-Qur'an" },
   { href: "/belajar", label: "Belajar" },
   { href: "/doa", label: "Doa & Dzikir" },

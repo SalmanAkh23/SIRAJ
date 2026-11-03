@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Sidebar from "@/components/sidebar";
 import Logo from "@/components/logo";
+import UserAvatar from "@/components/user-avatar";
 import {
   Menu,
   LayoutDashboard,
@@ -71,7 +72,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <Logo size={26} />
               SIRAJ
             </span>
-            <div className="w-9" />
+            <Link
+              href="/profile"
+              className="rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+              title="Buka Profil Saya"
+              aria-label="Buka Profil Saya"
+            >
+              <UserAvatar size="sm" rounded="lg" />
+            </Link>
           </div>
         </header>
 

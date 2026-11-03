@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import Logo from "@/components/logo";
+import UserAvatar from "@/components/user-avatar";
 import {
   LayoutDashboard,
   BookOpen,
@@ -16,10 +17,12 @@ import {
   Settings,
   LogOut,
   X,
+  Clock,
 } from "lucide-react";
 
 const mainLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/jadwal-salat", label: "Jadwal Salat", icon: Clock },
   { href: "/quran", label: "Al-Qur'an", icon: BookOpen },
   { href: "/belajar", label: "Belajar", icon: GraduationCap },
   { href: "/doa", label: "Doa & Dzikir", icon: HandHelping },
@@ -40,7 +43,7 @@ interface SidebarProps {
 
 export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
@@ -108,8 +111,28 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         </div>
       </div>
 
-      {/* Logout */}
-      <div className="px-3 pb-4">
+      {/* User Info & Logout */}
+      <div className="px-3 pb-4 pt-3 border-t border-border space-y-1.5">
+        <Link
+          href="/profile"
+          onClick={onClose}
+          className="flex items-center gap-3 px-2.5 py-2 rounded-xl hover:bg-primary/[0.04] transition-all group"
+          title="Buka Profil dan Pengaturan"
+        >
+          <UserAvatar size="sm" rounded="xl" />
+          <div className="min-w-0 flex-1">
+            <span className="block text-xs font-bold text-text truncate group-hover:text-primary transition-colors">
+              {user?.name || "Profil Saya"}
+            </span>
+            <span className="block text-[11px] text-muted truncate">
+              {user?.email || "Pengaturan Akun"}
+            </span>
+          </div>
+          <Settings
+            size={14}
+            className="text-muted group-hover:text-primary transition-colors shrink-0"
+          />
+        </Link>
         <button
           onClick={() => {
             logout();
