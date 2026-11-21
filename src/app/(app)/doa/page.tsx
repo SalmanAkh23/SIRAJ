@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import EmptyState from "@/components/empty-state";
 import IslamicBookCover, { BookVariant } from "@/components/islamic-book-cover";
 import { useBookmarks } from "@/lib/bookmark-context";
+import { recordDoaRead } from "@/lib/learning-progress";
 import {
   Search,
   Copy,
@@ -662,6 +663,7 @@ function DoaPageInner() {
 
   // Muat state counter dari localStorage
   useEffect(() => {
+    recordDoaRead();
     try {
       const rawCat = localStorage.getItem(CATEGORY_COUNTER_KEY);
       if (rawCat) {
@@ -676,7 +678,6 @@ function DoaPageInner() {
       if (rawTasbih) {
         const parsed = JSON.parse(rawTasbih);
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrasi localStorage saat mount
           setTasbihCounts(parsed as Record<string, number>);
         }
       }

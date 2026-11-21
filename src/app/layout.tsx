@@ -3,6 +3,8 @@ import { Inter, Amiri, Amiri_Quran } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { BookmarksProvider } from "@/lib/bookmark-context";
+import { ThemeProvider } from "@/lib/theme-context";
+import { LanguageProvider } from "@/lib/language-context";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -58,11 +60,24 @@ export default function RootLayout({
     <html
       lang="id"
       className={`${inter.variable} ${amiri.variable} ${amiriQuran.variable}`}
+      suppressHydrationWarning
     >
-        <body className="font-sans antialiased">
-        <AuthProvider>
-          <BookmarksProvider>{children}</BookmarksProvider>
-        </AuthProvider>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try { var theme = localStorage.getItem('siraj-theme'); if (theme === 'dark') document.documentElement.dataset.theme = 'dark'; var language = localStorage.getItem('siraj-language'); document.documentElement.lang = language === 'en' ? 'en' : 'id'; } catch (error) {}",
+          }}
+        />
+      </head>
+      <body className="font-sans antialiased">
+        <LanguageProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <BookmarksProvider>{children}</BookmarksProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

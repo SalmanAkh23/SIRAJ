@@ -1,7 +1,9 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
-import { mockBookmarks, type BookmarkItem } from "@/data/user";
+import { type BookmarkItem } from "@/data/user";
+import { useAuth } from "@/lib/auth-context";
+import { dispatchLearningUpdated, recordUserActivity } from "@/lib/learning-progress";
 
 export type BookmarkType = BookmarkItem["type"];
 
@@ -14,35 +16,66 @@ interface BookmarksContextType {
   remove: (id: string) => void;
 }
 
-const STORAGE_KEY = "siraj-bookmarks";
-
 const BookmarksContext = createContext<BookmarksContextType | undefined>(undefined);
 
-export function BookmarksProvider({ children }: { children: ReactNode }) {
-  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>(mockBookmarks);
+function getStorageKeyForEmail(email?: string | null): string {
+  const norm = (email ?? "").trim().toLowerCase();
+  return norm ? `siraj-bookmarks-${norm}` : "siraj-bookmarks";
+}
 
-  // Load saved bookmarks after mount (keeps SSR/CSR render consistent)
+export function BookmarksProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const userEmail = user?.email ?? null;
+
+  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+
+  // Load saved bookmarks when userEmail changes or upon mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const storageKey = getStorageKeyForEmail(userEmail);
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- sinkronisasi dari localStorage saat mount
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- sinkronisasi dari localStorage saat user berubah
           setBookmarks(parsed as BookmarkItem[]);
+          return;
         }
       }
+      setBookmarks([]);
     } catch {
-      // Ignore corrupted storage and fall back to mock data
+      setBookmarks([]);
     }
-  }, []);
+  }, [userEmail]);
 
-  const persist = useCallback((next: BookmarkItem[]) => {
+  // Sinkronisasi lintas tab
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      const currentKey = getStorageKeyForEmail(userEmail);
+      if (e.key === currentKey && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) {
+            setBookmarks(parsed);
+          }
+        } catch {
+          // Abaikan
+        }
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [userEmail]);
+
+  const persist = useCallback((next: BookmarkItem[], email: string | null) => {
     setBookmarks(next);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      const storageKey = getStorageKeyForEmail(email);
+      localStorage.setItem(storageKey, JSON.stringify(next));
+      // Trigger update ke seluruh komponen dashboard/profil
+      dispatchLearningUpdated();
     } catch {
-      // Storage unavailable (private mode) — state still works in memory
+      // Storage unavailable — state tetap bekerja di memory
     }
   }, []);
 
@@ -55,22 +88,27 @@ export function BookmarksProvider({ children }: { children: ReactNode }) {
     (item: BookmarkDraft) => {
       const exists = bookmarks.some((b) => b.id === item.id);
       if (exists) {
-        persist(bookmarks.filter((b) => b.id !== item.id));
+        persist(bookmarks.filter((b) => b.id !== item.id), userEmail);
       } else {
-        persist([
-          { ...item, savedAt: new Date().toISOString().slice(0, 10) },
-          ...bookmarks,
-        ]);
+        const today = new Date().toISOString().slice(0, 10);
+        recordUserActivity(userEmail, today);
+        persist(
+          [
+            { ...item, savedAt: today },
+            ...bookmarks,
+          ],
+          userEmail
+        );
       }
     },
-    [bookmarks, persist]
+    [bookmarks, persist, userEmail]
   );
 
   const remove = useCallback(
     (id: string) => {
-      persist(bookmarks.filter((b) => b.id !== id));
+      persist(bookmarks.filter((b) => b.id !== id), userEmail);
     },
-    [bookmarks, persist]
+    [bookmarks, persist, userEmail]
   );
 
   return (

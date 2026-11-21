@@ -4,7 +4,9 @@ import { useMemo, useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
+import ThemeToggle from "@/components/theme-toggle";
 import { useBookmarks } from "@/lib/bookmark-context";
+import { recordHaditsRead } from "@/lib/learning-progress";
 import {
   HADITS_BOOKS,
   fetchHaditsList,
@@ -32,6 +34,10 @@ import {
   ScrollText,
 } from "lucide-react";
 
+function getHaditsTranslation(hadits: Pick<HaditsItem, "text" | "translation">) {
+  return hadits.translation?.trim() || hadits.text;
+}
+
 // ---------------------------------------------------------------------------
 // Komponen Kartu Hadits
 // ---------------------------------------------------------------------------
@@ -47,6 +53,7 @@ function HaditsCard({
     isBookmarked(hadits.id) ||
     isBookmarked(`hadits-${hadits.number}`) ||
     isBookmarked(`arbain-${hadits.number}`);
+  const translation = getHaditsTranslation(hadits);
 
   const handleBookmarkClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -56,7 +63,7 @@ function HaditsCard({
       title: hadits.title
         ? `Hadits ${hadits.number}: ${hadits.title}`
         : `${hadits.bookName} no. ${hadits.number}`,
-      description: hadits.matanSnippet || hadits.text,
+      description: translation,
       href: `/hadits?kitab=${hadits.bookSlug}&nomor=${hadits.number}`,
     });
   };
@@ -116,24 +123,18 @@ function HaditsCard({
       {hadits.arab && (
         <div className="my-2 p-3.5 bg-primary/[0.025] border border-primary/10 rounded-xl">
           <p
-            className="arabic-text text-xl sm:text-2xl leading-loose text-right text-text select-text"
+            className="arabic-text break-words whitespace-pre-wrap text-xl sm:text-2xl leading-loose text-right text-text select-text"
             lang="ar"
             dir="rtl"
           >
-            {hadits.arab.length > 200 ? `${hadits.arab.slice(0, 200)}...` : hadits.arab}
+            {hadits.arab}
           </p>
         </div>
       )}
 
       {/* Terjemahan Bahasa Indonesia */}
-      <p className="text-text leading-relaxed flex-1 text-sm sm:text-base mt-2">
-        &ldquo;
-        {hadits.matanSnippet
-          ? hadits.matanSnippet
-          : hadits.text.length > 220
-          ? `${hadits.text.slice(0, 220)}...`
-          : hadits.text}
-        &rdquo;
+      <p className="text-text leading-relaxed break-words whitespace-pre-wrap flex-1 text-sm sm:text-base mt-2">
+        &ldquo;{translation}&rdquo;
       </p>
 
       {/* Footer Info: Perawi Sahabat, Sumber Kitab, Action */}
@@ -197,6 +198,8 @@ function HaditsDetailModal({
 }) {
   const { isBookmarked, toggle } = useBookmarks();
   const [copied, setCopied] = useState(false);
+  const [isReadingMode, setIsReadingMode] = useState(false);
+  const [arabicScale, setArabicScale] = useState<1 | 2 | 3>(2);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -212,6 +215,7 @@ function HaditsDetailModal({
     isBookmarked(hadits.id) ||
     isBookmarked(`hadits-${hadits.number}`) ||
     isBookmarked(`arbain-${hadits.number}`);
+  const translation = getHaditsTranslation(hadits);
 
   const handleCopy = async () => {
     const lines = [
@@ -222,7 +226,7 @@ function HaditsDetailModal({
       "",
       hadits.arab ? `${hadits.arab}\n` : "",
       `Terjemahan:`,
-      `"${hadits.text}"`,
+      `"${translation}"`,
       "",
     ];
 
@@ -252,7 +256,7 @@ function HaditsDetailModal({
       title: hadits.title
         ? `Hadits ${hadits.number}: ${hadits.title}`
         : `${hadits.bookName} no. ${hadits.number}`,
-      description: hadits.matanSnippet || hadits.text,
+      description: translation,
       href: `/hadits?kitab=${hadits.bookSlug}&nomor=${hadits.number}`,
     });
   };
@@ -260,13 +264,16 @@ function HaditsDetailModal({
   return (
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+      data-reading-mode={isReadingMode ? "true" : "false"}
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-hadits-title"
     >
       <div
-        className="bg-surface rounded-2xl border border-border shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        className={`hadits-reading-panel bg-surface rounded-2xl border border-border shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${
+          isReadingMode ? "hadits-reading-panel--active" : ""
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -288,17 +295,62 @@ function HaditsDetailModal({
               {hadits.title ? hadits.title : `${hadits.bookName} No. ${hadits.number}`}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 -mr-1 rounded-xl text-muted hover:text-text hover:bg-background transition-colors"
-            aria-label="Tutup jendela detail hadits"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setIsReadingMode((active) => !active)}
+              aria-pressed={isReadingMode}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border px-2.5 sm:px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/[0.06]"
+            >
+              <BookMarked size={14} />
+              <span className="whitespace-nowrap">
+                {isReadingMode ? "Keluar Mode Baca" : "Mode Baca"}
+              </span>
+            </button>
+            <ThemeToggle compact />
+            <button
+              onClick={onClose}
+              className="p-2 -mr-1 rounded-xl text-muted hover:text-text hover:bg-background transition-colors"
+              aria-label="Tutup jendela detail hadits"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body (Scrollable) */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
+        <div
+          className={`hadits-reading-body min-h-0 flex-1 p-4 sm:p-6 overflow-y-auto space-y-6 ${
+            isReadingMode ? "text-base" : ""
+          }`}
+        >
+          {isReadingMode && (
+            <div className="flex items-center justify-end gap-2 -mb-2">
+              <span className="text-xs text-muted">Ukuran teks Arab</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setArabicScale((size) => Math.max(1, size - 1) as 1 | 2 | 3)
+                }
+                disabled={arabicScale === 1}
+                aria-label="Perkecil teks Arab hadits"
+                className="rounded-lg px-2.5 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-primary/[0.06] hover:text-text disabled:opacity-40"
+              >
+                A−
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setArabicScale((size) => Math.min(3, size + 1) as 1 | 2 | 3)
+                }
+                disabled={arabicScale === 3}
+                aria-label="Perbesar teks Arab hadits"
+                className="rounded-lg px-2.5 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-primary/[0.06] hover:text-text disabled:opacity-40"
+              >
+                A+
+              </button>
+            </div>
+          )}
           {/* Teks Arab Matan Lengkap */}
           {hadits.arab && (
             <div className="p-4 sm:p-5 bg-primary/[0.03] border border-primary/10 rounded-2xl">
@@ -306,7 +358,19 @@ function HaditsDetailModal({
                 Teks Arab (Matan Lengkap Berharakat)
               </p>
               <p
-                className="arabic-text text-2xl sm:text-3xl leading-loose sm:leading-loose text-right text-text select-text"
+                className="arabic-text break-words whitespace-pre-wrap text-2xl sm:text-3xl leading-loose sm:leading-loose text-right text-text select-text"
+                style={
+                  isReadingMode
+                    ? {
+                        fontSize:
+                          arabicScale === 1
+                            ? "1.75rem"
+                            : arabicScale === 2
+                            ? "2rem"
+                            : "2.25rem",
+                      }
+                    : undefined
+                }
                 lang="ar"
                 dir="rtl"
               >
@@ -321,8 +385,12 @@ function HaditsDetailModal({
               Terjemahan Bahasa Indonesia
             </p>
             <div className="p-4 bg-background rounded-xl border border-border">
-              <p className="text-text leading-relaxed text-sm sm:text-base select-text">
-                &ldquo;{hadits.text}&rdquo;
+              <p
+                className={`text-text break-words whitespace-pre-wrap leading-relaxed select-text ${
+                  isReadingMode ? "text-base sm:text-lg" : "text-sm sm:text-base"
+                }`}
+              >
+                &ldquo;{translation}&rdquo;
               </p>
             </div>
           </div>
@@ -353,7 +421,7 @@ function HaditsDetailModal({
 
           {/* Pelajaran & Faedah Hadits */}
           {hadits.lessons && hadits.lessons.length > 0 && (
-            <div className="p-4 bg-secondary/10 border border-secondary/30 rounded-2xl space-y-2">
+            <div data-reading-hide className="p-4 bg-secondary/10 border border-secondary/30 rounded-2xl space-y-2">
               <div className="flex items-center gap-2 text-xs font-bold text-secondary-dark uppercase tracking-wider">
                 <ScrollText size={15} />
                 <span>Pelajaran &amp; Faedah Hadits</span>
@@ -370,7 +438,7 @@ function HaditsDetailModal({
           )}
 
           {hadits.note && (
-            <div className="p-3 bg-primary/[0.04] border border-primary/15 rounded-xl">
+            <div data-reading-hide className="p-3 bg-primary/[0.04] border border-primary/15 rounded-xl">
               <p className="text-xs text-text leading-relaxed">
                 <span className="font-semibold text-primary">Catatan Syarah:</span>{" "}
                 {hadits.note}
@@ -378,7 +446,7 @@ function HaditsDetailModal({
             </div>
           )}
 
-          <div className="text-[11px] text-muted leading-relaxed flex items-center gap-1.5 pt-1">
+          <div data-reading-hide className="text-[11px] text-muted leading-relaxed flex items-center gap-1.5 pt-1">
             <Info size={13} className="text-primary shrink-0" />
             <span>
               Teks hadits disinkronkan dengan Kitab Al-Arba&apos;in An-Nawawiyyah karya
@@ -449,6 +517,10 @@ function HaditsPageContent() {
 
   // Modal detail
   const [activeDetail, setActiveDetail] = useState<HaditsItem | null>(null);
+
+  useEffect(() => {
+    recordHaditsRead();
+  }, []);
 
   // Ambil buku aktif (default: Arba'in An-Nawawi)
   const currentBook = useMemo(

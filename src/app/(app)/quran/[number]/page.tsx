@@ -23,10 +23,12 @@ import {
   type QuranLastRead,
 } from "@/lib/quran-api";
 import EmptyState from "@/components/empty-state";
+import ThemeToggle from "@/components/theme-toggle";
 import {
   AlertCircle,
   ArrowLeft,
   Bookmark,
+  BookOpen,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -49,6 +51,11 @@ const SCALE_CLASS: Record<ScaleKey, string> = {
   1: "quran-arabic--sm",
   2: "quran-arabic--md",
   3: "quran-arabic--lg",
+};
+const TRANSLATION_SCALE: Record<ScaleKey, string> = {
+  1: "1rem",
+  2: "1.125rem",
+  3: "1.25rem",
 };
 
 const KEY_TRANSLATION = "siraj-quran-show-translation";
@@ -127,6 +134,8 @@ export default function SurahDetailPage() {
     readShowTranslation()
   );
   const [scale, setScale] = useState<ScaleKey>(() => readScale());
+  const [translationScale, setTranslationScale] = useState<ScaleKey>(2);
+  const [isReadingMode, setIsReadingMode] = useState(false);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -371,6 +380,13 @@ export default function SurahDetailPage() {
     }
   };
 
+  const toggleReadingMode = () => {
+    if (!isReadingMode && !showTranslation) {
+      toggleTranslation();
+    }
+    setIsReadingMode((active) => !active);
+  };
+
   const handleShare = async (verse: QuranVerse) => {
     const title = `QS. ${chapterName}: ${verse.number}`;
     const text = `${title}\n\n"${verse.translation}"\n\n— SIRAJ`;
@@ -387,10 +403,14 @@ export default function SurahDetailPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-10 py-8 lg:py-10">
+    <div
+      className="quran-reader max-w-4xl mx-auto px-4 sm:px-6 lg:px-10 py-8 lg:py-10"
+      data-reading-mode={isReadingMode ? "true" : "false"}
+    >
       {/* Kembali */}
       <Link
         href="/quran"
+        data-reading-hide
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-primary transition-colors mb-6"
       >
         <ArrowLeft size={16} />
@@ -428,7 +448,7 @@ export default function SurahDetailPage() {
       {status === "ready" && chapter && (
         <>
           {/* Header surah */}
-          <header className="card relative overflow-hidden mb-6 text-center">
+          <header data-reading-hide className="card relative overflow-hidden mb-6 text-center">
             <div
               className="absolute inset-0 pattern-star pattern-fade opacity-[0.05] pointer-events-none"
               aria-hidden="true"
@@ -484,19 +504,26 @@ export default function SurahDetailPage() {
           </header>
 
           {/* Toolbar bacaan & Multi-Qari */}
-          <div className="sticky top-14 lg:top-4 z-20 mb-6 px-2.5 py-2 bg-surface/90 backdrop-blur-md border border-border/70 rounded-xl shadow-xs">
+          <div
+            className={`z-20 mb-6 px-2.5 py-2 bg-surface/90 backdrop-blur-md border border-border/70 rounded-xl shadow-xs ${
+              isReadingMode ? "" : "sticky top-14 lg:top-4"
+            }`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-0.5">
                 <button
                   onClick={toggleTranslation}
-                  aria-pressed={showTranslation}
+                  aria-pressed={showTranslation || isReadingMode}
+                  disabled={isReadingMode}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer ${
-                    showTranslation
+                    showTranslation || isReadingMode
                       ? "bg-primary text-white"
                       : "text-muted hover:text-text hover:bg-primary/[0.05]"
                   }`}
                   title={
-                    showTranslation
+                    isReadingMode
+                      ? "Terjemahan selalu ditampilkan dalam Mode Baca"
+                      : showTranslation
                       ? "Sembunyikan terjemahan"
                       : "Tampilkan terjemahan"
                   }
@@ -532,11 +559,43 @@ export default function SurahDetailPage() {
                 >
                   A+
                 </button>
+                {isReadingMode && (
+                  <>
+                    <span className="w-px h-5 bg-border mx-1.5" aria-hidden="true" />
+                    <span className="text-xs text-muted hidden sm:inline">Terjemahan</span>
+                    <button
+                      onClick={() =>
+                        setTranslationScale(
+                          Math.max(1, translationScale - 1) as ScaleKey
+                        )
+                      }
+                      disabled={translationScale === 1}
+                      aria-label="Perkecil teks terjemahan"
+                      title="Perkecil teks terjemahan"
+                      className="px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-muted hover:text-text hover:bg-primary/[0.05] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      A−
+                    </button>
+                    <button
+                      onClick={() =>
+                        setTranslationScale(
+                          Math.min(3, translationScale + 1) as ScaleKey
+                        )
+                      }
+                      disabled={translationScale === 3}
+                      aria-label="Perbesar teks terjemahan"
+                      title="Perbesar teks terjemahan"
+                      className="px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-muted hover:text-text hover:bg-primary/[0.05] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      A+
+                    </button>
+                  </>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 {/* Pilihan Qari */}
-                <div className="inline-flex items-center gap-1.5 bg-[#F8F7F2] border border-border rounded-lg px-2.5 py-1">
+                <div className="inline-flex items-center gap-1.5 bg-background border border-border rounded-lg px-2.5 py-1">
                   <Volume2 size={14} className="text-primary shrink-0" />
                   <label htmlFor="surah-reciter-select" className="sr-only">
                     Pilih Qari Murottal
@@ -571,12 +630,22 @@ export default function SurahDetailPage() {
                     ? "Hentikan"
                     : "Putar surah"}
                 </button>
+                <button
+                  type="button"
+                  onClick={toggleReadingMode}
+                  aria-pressed={isReadingMode}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs sm:text-sm font-medium text-primary transition-colors hover:bg-primary/[0.06]"
+                >
+                  <BookOpen size={15} />
+                  {isReadingMode ? "Keluar Mode Baca" : "Mode Baca"}
+                </button>
+                <ThemeToggle compact />
               </div>
             </div>
           </div>
 
           {/* Bacaan mushaf */}
-          <section className="card px-4 sm:px-8 lg:px-10 py-6 sm:py-8">
+          <section className="card quran-reading-content px-4 sm:px-8 lg:px-10 py-6 sm:py-8">
             {basmalah && (
               <div className="text-center pb-5 mb-2 border-b border-border/70">
                 <p
@@ -600,9 +669,10 @@ export default function SurahDetailPage() {
                   <article
                     key={verse.key}
                     id={`ayat-${verse.number}`}
-                    className={`py-6 scroll-mt-32 rounded-xl px-2 sm:px-3 transition-colors ${
+                    aria-current={isPlaying || isLastReadVerse ? "location" : undefined}
+                    className={`py-6 scroll-mt-32 rounded-xl px-2 sm:px-3 transition-colors duration-200 ${
                       isPlaying
-                        ? "bg-primary/[0.04] ring-1 ring-primary/20"
+                        ? "bg-primary/[0.04] ring-1 ring-primary/20 border-s-2 border-primary ps-3"
                         : isLastReadVerse
                         ? "bg-[#D6B878]/[0.08] ring-1 ring-[#D6B878]/50"
                         : ""
@@ -628,7 +698,7 @@ export default function SurahDetailPage() {
                     </p>
 
                     {/* Terjemahan */}
-                    {showTranslation && (
+                    {(showTranslation || isReadingMode) && (
                       <div className="mt-5">
                         <div
                           className="flex items-center gap-3 mb-3"
@@ -638,7 +708,14 @@ export default function SurahDetailPage() {
                           <span className="w-1.5 h-1.5 rotate-45 bg-secondary/70" />
                           <span className="h-px flex-1 bg-border/80" />
                         </div>
-                        <p className="text-[0.97rem] sm:text-base leading-relaxed text-text/85">
+                        <p
+                          className="text-[0.97rem] sm:text-base leading-relaxed text-text/85"
+                          style={{
+                            fontSize: isReadingMode
+                              ? TRANSLATION_SCALE[translationScale]
+                              : undefined,
+                          }}
+                        >
                           {verse.translation}
                         </p>
                       </div>
@@ -649,7 +726,8 @@ export default function SurahDetailPage() {
                       <button
                         type="button"
                         onClick={() => handleMarkLastRead(verse)}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        data-reading-hide
+                        className={`reading-secondary-action inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-200 cursor-pointer ${
                           isLastReadVerse
                             ? "bg-primary text-white"
                             : "text-muted hover:text-primary hover:bg-primary/[0.05]"
@@ -672,7 +750,7 @@ export default function SurahDetailPage() {
                             href: `/quran/${surahNumber}#ayat-${verse.number}`,
                           })
                         }
-                        className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                        className={`min-h-11 min-w-11 p-2.5 rounded-xl transition-colors duration-200 cursor-pointer ${
                           saved
                             ? "text-primary bg-primary/[0.08]"
                             : "text-muted hover:text-primary hover:bg-primary/[0.05]"
@@ -692,7 +770,7 @@ export default function SurahDetailPage() {
                       <button
                         onClick={() => playVerseAudio(verse)}
                         disabled={!verse.audioUrl || isSwitchingQari}
-                        className={`p-2 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                        className={`min-h-11 min-w-11 p-2.5 rounded-xl transition-colors duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                           isPlaying
                             ? "text-primary bg-primary/[0.08]"
                             : "text-muted hover:text-primary hover:bg-primary/[0.05]"
@@ -715,7 +793,8 @@ export default function SurahDetailPage() {
 
                       <button
                         onClick={() => handleShare(verse)}
-                        className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/[0.05] transition-colors cursor-pointer"
+                        data-reading-hide
+                        className="reading-secondary-action min-h-11 min-w-11 p-2.5 rounded-xl text-muted hover:text-primary hover:bg-primary/[0.05] transition-colors duration-200 cursor-pointer"
                         aria-label="Bagikan ayat"
                         title="Bagikan"
                       >
@@ -730,7 +809,7 @@ export default function SurahDetailPage() {
 
           {/* Sumber terjemahan & data */}
           {edition && (
-            <p className="text-xs text-muted text-center mt-6 leading-relaxed">
+            <p data-reading-hide className="text-xs text-muted text-center mt-6 leading-relaxed">
               Terjemahan Bahasa Indonesia — {edition.name}
               <br />
               Teks Arab: Mushaf Utsmani • Qari: {currentReciter.name} • Data dan
@@ -740,6 +819,7 @@ export default function SurahDetailPage() {
 
           {/* Navigasi surah */}
           <nav
+            data-reading-hide
             className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 mt-8"
             aria-label="Navigasi surah"
           >

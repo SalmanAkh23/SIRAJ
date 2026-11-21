@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { mockUser } from "@/data/user";
 import UserAvatar from "@/components/user-avatar";
 import { useBookmarks } from "@/lib/bookmark-context";
-import { getMateriById, materiList } from "@/data/materi";
+import { getMateriById } from "@/data/materi";
 import {
   readLastRead,
   readJuzProgressMap,
@@ -14,6 +14,14 @@ import {
   type JuzProgressEntry,
 } from "@/lib/quran-api";
 import type { ExamSubmitResponse } from "@/app/api/quiz/route";
+import {
+  readUserLearningData,
+  calculateRealStreak,
+  calculateCategoryProgress,
+  calculateAverageProgress,
+  getRecentMateriList,
+  EVENT_LEARNING_UPDATED,
+} from "@/lib/learning-progress";
 import {
   BookOpen,
   Trophy,
@@ -40,8 +48,11 @@ import {
   AlertCircle,
   Sparkles,
   Award,
+  Flame,
   X,
+  Languages,
 } from "lucide-react";
+import { useLanguage } from "@/lib/language-context";
 
 const PREFS_STORAGE_KEY = "siraj-profile-preferences-v1";
 const QURAN_TRANSLATION_KEY = "siraj-quran-show-translation";
@@ -116,6 +127,7 @@ function resizeAvatarImage(file: File): Promise<string> {
 export default function ProfilePage() {
   const { user, updateProfile, updatePassword, logout } = useAuth();
   const { bookmarks } = useBookmarks();
+  const { language, setLanguage, t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Toast Notification
@@ -363,24 +375,43 @@ export default function ProfilePage() {
   // ==========================================================================
   // Kalkulasi Statistik Belajar dari Data Aktual Pengguna
   // ==========================================================================
-  const progressList = activeUser.progress ?? mockUser.progress;
+  const [learningData, setLearningData] = useState(() =>
+    readUserLearningData(activeUser.email)
+  );
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sinkronisasi saat email berganti
+    setLearningData(readUserLearningData(activeUser.email));
+
+    const handleUpdate = () => {
+      setLearningData(readUserLearningData(activeUser.email));
+    };
+
+    window.addEventListener(EVENT_LEARNING_UPDATED, handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener(EVENT_LEARNING_UPDATED, handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, [activeUser.email]);
+
+  const categoryProgressList = useMemo(() => {
+    return calculateCategoryProgress(activeUser.email);
+  }, [activeUser.email]);
 
   const avgLearningProgress = useMemo(() => {
-    if (!progressList.length) return 0;
-    const total = progressList.reduce((acc, item) => acc + item.percentage, 0);
-    return Math.round(total / progressList.length);
-  }, [progressList]);
+    return calculateAverageProgress(activeUser.email);
+  }, [activeUser.email]);
 
-  const materiStudiedCount = useMemo(() => {
-    const startedInList = materiList.filter((m) => m.progress > 0).length;
-    return Math.max(activeUser.stats.materiCompleted, startedInList);
-  }, [activeUser.stats.materiCompleted]);
+  const materiStudiedCount = learningData.completedMateriIds.length;
+
+  const userRealStreak = useMemo(() => {
+    return calculateRealStreak(activeUser.email);
+  }, [activeUser.email]);
 
   const totalQuizCompleted = useMemo(() => {
-    return examHistory.length > 0
-      ? examHistory.length
-      : activeUser.stats.quizCompleted;
-  }, [examHistory.length, activeUser.stats.quizCompleted]);
+    return examHistory.length;
+  }, [examHistory.length]);
 
   const avgQuizScore = useMemo(() => {
     if (examHistory.length === 0) return null;
@@ -390,11 +421,11 @@ export default function ProfilePage() {
   }, [examHistory]);
 
   const recentMateriItems = useMemo(() => {
-    const ids = activeUser.recentMateri ?? [];
-    return ids
-      .map((id) => getMateriById(id))
+    const recents = getRecentMateriList(activeUser.email);
+    return recents
+      .map((item) => getMateriById(item.id))
       .filter((m): m is NonNullable<typeof m> => Boolean(m));
-  }, [activeUser.recentMateri]);
+  }, [activeUser.email]);
 
   return (
     <div className="min-h-screen bg-[#F8F7F2] text-[#263A35]">
@@ -499,6 +530,10 @@ export default function ProfilePage() {
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#D6B878]/20 text-[#D6B878] border border-[#D6B878]/40">
                       <ShieldCheck size={12} />
                       Akun Aktif
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/15 text-white border border-white/25">
+                      <Flame size={12} className="text-[#D6B878]" />
+                      {userRealStreak} Hari Streak
                     </span>
                   </div>
 
@@ -804,15 +839,20 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-4">
-                {progressList.map((item) => (
+                {categoryProgressList.map((item) => (
                   <div key={item.category}>
                     <div className="flex items-center justify-between text-xs sm:text-sm mb-1.5">
                       <span className="font-semibold text-[#263A35]">
                         {item.category}
                       </span>
-                      <span className="font-bold text-[#174A3A]">
-                        {item.percentage}%
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-[#718078]">
+                          ({item.completedCount}/{item.totalCount})
+                        </span>
+                        <span className="font-bold text-[#174A3A]">
+                          {item.percentage}%
+                        </span>
+                      </div>
                     </div>
                     <div
                       className="h-2 bg-[#ECE9DF] rounded-full overflow-hidden"
@@ -1094,6 +1134,49 @@ export default function ProfilePage() {
               </div>
 
               <div className="divide-y divide-[#F0EDE4]">
+                {/* Bahasa UI */}
+                <div className="p-5 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <span className="w-10 h-10 rounded-xl bg-[#174A3A]/[0.08] text-[#174A3A] flex items-center justify-center shrink-0">
+                      <Languages size={17} />
+                    </span>
+                    <div>
+                      <span className="block text-sm font-semibold text-[#263A35]">
+                        {t("settings.language")}
+                      </span>
+                      <span className="block text-xs text-[#718078]">
+                        {t("settings.languageDescription")}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 rounded-xl border border-[#E6E3D8] bg-[#F8F7F2] p-1">
+                    <button
+                      type="button"
+                      onClick={() => setLanguage("id")}
+                      aria-pressed={language === "id"}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                        language === "id"
+                          ? "bg-white text-[#174A3A]"
+                          : "text-[#718078] hover:text-[#263A35]"
+                      }`}
+                    >
+                      🇮🇩 Bahasa Indonesia
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLanguage("en")}
+                      aria-pressed={language === "en"}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                        language === "en"
+                          ? "bg-white text-[#174A3A]"
+                          : "text-[#718078] hover:text-[#263A35]"
+                      }`}
+                    >
+                      🇬🇧 English
+                    </button>
+                  </div>
+                </div>
+
                 {/* 1. Ubah Foto Profil */}
                 <div className="p-5 flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">

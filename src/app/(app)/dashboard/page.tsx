@@ -1,36 +1,49 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useBookmarks } from "@/lib/bookmark-context";
 import UserAvatar from "@/components/user-avatar";
-import { mockUser } from "@/data/user";
-import { getMateriById } from "@/data/materi";
 import { dailyVerse } from "@/data/quran";
 import { haditsList } from "@/data/hadits";
 import { doaList } from "@/data/doa";
 import { getHijriDate } from "@/lib/salat";
 import {
+  readUserLearningData,
+  calculateRealStreak,
+  calculateCategoryProgress,
+  calculateAverageProgress,
+  getRecentMateriList,
+  getDailyTasks,
+  toggleDailyTask,
+  EVENT_LEARNING_UPDATED,
+  CategoryProgressItem,
+  DailyTaskItem,
+} from "@/lib/learning-progress";
+import {
   ArrowRight,
   BookOpen,
+  BookMarked,
   Quote,
   HandHelping,
   Check,
   Clock,
   ChevronRight,
   Flame,
-  Trophy,
   GraduationCap,
   Bookmark,
   Sparkles,
   Settings,
   Calendar,
   ArrowUpRight,
-  BookMarked,
+  Mic,
+  CheckCircle2,
+  RotateCcw,
+  Target,
 } from "lucide-react";
-
-const TASKS_STORAGE_KEY = "siraj_dashboard_daily_tasks";
+import { readMurajaahStats } from "@/lib/murajaah-storage";
+import type { MurajaahStats } from "@/lib/murajaah-types";
 
 const quickAccessItems = [
   {
@@ -41,11 +54,11 @@ const quickAccessItems = [
     accent: "text-primary bg-primary/10",
   },
   {
-    href: "/jadwal-salat",
-    label: "Jadwal Salat",
-    desc: "Waktu Salat & Kiblat",
-    icon: Clock,
-    accent: "text-primary bg-primary/10",
+    href: "/murajaah",
+    label: "Tartel",
+    desc: "Latihan murajaah Al-Qur'an",
+    icon: Mic,
+    accent: "text-primary bg-[#D6B878]/30",
   },
   {
     href: "/belajar",
@@ -63,16 +76,9 @@ const quickAccessItems = [
   },
   {
     href: "/hadits",
-    label: "Kutipan Hadits",
-    desc: "Hadits Shahih Tematik",
+    label: "Hadits",
+    desc: "Pelajari hadits pilihan",
     icon: BookMarked,
-    accent: "text-primary bg-primary/10",
-  },
-  {
-    href: "/quiz",
-    label: "Kuis Islami",
-    desc: "Uji Pemahaman Agama",
-    icon: Trophy,
     accent: "text-secondary-dark bg-secondary/15",
   },
 ];
@@ -80,6 +86,27 @@ const quickAccessItems = [
 export default function DashboardPage() {
   const { user } = useAuth();
   const { bookmarks } = useBookmarks();
+
+  const userEmail = user?.email ?? null;
+
+  // State Metrik Dinamis Pengguna
+  const [isClientReady, setIsClientReady] = useState(false);
+  const [completedCount, setCompletedCount] = useState<number>(0);
+  const [avgProgress, setAvgProgress] = useState<number>(0);
+  const [streakDays, setStreakDays] = useState<number>(0);
+  const [categoryProgress, setCategoryProgress] = useState<CategoryProgressItem[]>([]);
+  const [recentMateri, setRecentMateri] = useState<
+    Array<{
+      id: string;
+      title: string;
+      category: string;
+      readTime: number;
+      progress: number;
+      isCompleted: boolean;
+    }>
+  >([]);
+  const [tasks, setTasks] = useState<DailyTaskItem[]>([]);
+  const [murajaahStats, setMurajaahStats] = useState<MurajaahStats | null>(null);
 
   // Dynamic Dates
   const todayMasehi = useMemo(() => {
@@ -95,61 +122,54 @@ export default function DashboardPage() {
     return getHijriDate(new Date());
   }, []);
 
-  // Daily Tasks state with local storage persistence
-  const [tasks, setTasks] = useState(() => {
-    const defaultTasks = user?.dailyTasks ?? mockUser.dailyTasks;
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(TASKS_STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {
-        // ignore
-      }
-    }
-    return defaultTasks;
-  });
+  // Muat data dinamis dari storage
+  const loadDynamicData = useCallback(() => {
+    if (typeof window === "undefined") return;
 
-  const toggleTask = (id: string) => {
-    setTasks((prev: typeof tasks) => {
-      const next = prev.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      );
-      try {
-        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        // ignore
-      }
-      return next;
-    });
+    const learning = readUserLearningData(userEmail);
+    const completed = learning.completedMateriIds.length;
+    const avg = calculateAverageProgress(userEmail);
+    const streak = calculateRealStreak(userEmail);
+    const catProg = calculateCategoryProgress(userEmail);
+    const recent = getRecentMateriList(userEmail);
+    const dailyTasksList = getDailyTasks(userEmail);
+
+    setCompletedCount(completed);
+    setAvgProgress(avg);
+    setStreakDays(streak);
+    setCategoryProgress(catProg);
+    setRecentMateri(recent);
+    setTasks(dailyTasksList);
+    setMurajaahStats(readMurajaahStats());
+    setIsClientReady(true);
+  }, [userEmail]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sinkronisasi metrik dinamis user saat mount & pergantian akun
+    loadDynamicData();
+
+    const handleUpdate = () => {
+      loadDynamicData();
+    };
+
+    window.addEventListener(EVENT_LEARNING_UPDATED, handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener(EVENT_LEARNING_UPDATED, handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, [loadDynamicData]);
+
+  // Handler toggle daily task
+  const handleToggleTask = (taskId: string) => {
+    const updated = toggleDailyTask(userEmail, taskId);
+    setTasks(updated);
   };
 
-  const completedCount = tasks.filter((t) => t.completed).length;
-  const progressPercent = Math.round((completedCount / tasks.length) * 100);
+  const tasksCompletedCount = tasks.filter((t) => t.completed).length;
+  const tasksProgressPercent = tasks.length > 0 ? Math.round((tasksCompletedCount / tasks.length) * 100) : 0;
 
-  // User Stats & Progress Calculations
-  const stats = user?.stats ?? mockUser.stats;
-  const userProgress = user?.progress ?? mockUser.progress;
-
-  const avgProgress = useMemo(() => {
-    if (!userProgress.length) return 0;
-    const sum = userProgress.reduce((acc, curr) => acc + curr.percentage, 0);
-    return Math.round(sum / userProgress.length);
-  }, [userProgress]);
-
-  // Recent materi resolution
-  const recentMateri = useMemo(() => {
-    const list = user?.recentMateri ?? mockUser.recentMateri;
-    return list
-      .map((id) => getMateriById(id))
-      .filter((m): m is NonNullable<typeof m> => Boolean(m));
-  }, [user?.recentMateri]);
-
-  // Greeting name
   const userName = user?.name ? user.name.trim() : null;
-
   const hadits = haditsList[0];
   const doa = doaList[0];
 
@@ -205,7 +225,7 @@ export default function DashboardPage() {
           aria-hidden="true"
         />
 
-        {/* Decorative Golden Rosette Accent (subtle right watermark) */}
+        {/* Decorative Golden Rosette Accent */}
         <div
           className="absolute -right-8 -bottom-10 w-64 h-64 opacity-15 pointer-events-none"
           aria-hidden="true"
@@ -251,7 +271,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* 3. Ringkasan Aktivitas Belajar (Activity Summary Metric Cards) */}
+      {/* 3. Ringkasan Aktivitas Belajar (Dynamic User Metrics) */}
       <section className="mb-8">
         <div className="flex items-center justify-between mb-3.5">
           <h2 className="text-lg font-bold text-text">Ringkasan Aktivitas</h2>
@@ -274,7 +294,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <div className="text-2xl font-bold text-text tracking-tight">
-                {stats.materiCompleted}
+                {isClientReady ? completedCount : <span className="inline-block w-8 h-7 bg-muted/20 animate-pulse rounded" />}
               </div>
               <span className="text-xs text-muted mt-0.5 block">Materi terselesaikan</span>
             </div>
@@ -290,7 +310,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <div className="text-2xl font-bold text-primary tracking-tight">
-                {avgProgress}%
+                {isClientReady ? `${avgProgress}%` : <span className="inline-block w-12 h-7 bg-muted/20 animate-pulse rounded" />}
               </div>
               <div className="w-full bg-border h-1.5 rounded-full mt-1.5 overflow-hidden">
                 <div
@@ -311,13 +331,13 @@ export default function DashboardPage() {
             </div>
             <div>
               <div className="text-2xl font-bold text-text tracking-tight">
-                {bookmarks.length}
+                {isClientReady ? bookmarks.length : <span className="inline-block w-8 h-7 bg-muted/20 animate-pulse rounded" />}
               </div>
               <span className="text-xs text-muted mt-0.5 block">Ayat, hadits, &amp; doa</span>
             </div>
           </div>
 
-          {/* Card 4: Streak */}
+          {/* Card 4: Streak Riil */}
           <div className="card !p-5 flex flex-col justify-between hover:border-primary/30 transition-all">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-muted">Konsistensi Belajar</span>
@@ -327,7 +347,13 @@ export default function DashboardPage() {
             </div>
             <div>
               <div className="text-2xl font-bold text-text tracking-tight">
-                {stats.streak} <span className="text-sm font-semibold text-muted">Hari</span>
+                {isClientReady ? (
+                  <>
+                    {streakDays} <span className="text-sm font-semibold text-muted">Hari</span>
+                  </>
+                ) : (
+                  <span className="inline-block w-12 h-7 bg-muted/20 animate-pulse rounded" />
+                )}
               </div>
               <span className="text-xs text-muted mt-0.5 block">Streak aktif</span>
             </div>
@@ -344,7 +370,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           {quickAccessItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -376,7 +402,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* 5. Main Content Grid: Rekomendasi/Materi Terakhir + Tantangan Harian */}
+      {/* 5. Main Content Grid: Materi Terakhir + Tantangan Harian */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
         {/* Left Column (2/3): Materi Terakhir & Inspirasi Hari Ini */}
         <div className="lg:col-span-2 space-y-8">
@@ -409,6 +435,11 @@ export default function DashboardPage() {
                           <Clock size={12} />
                           {materi.readTime} menit baca
                         </span>
+                        {materi.isCompleted && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary">
+                            <CheckCircle2 size={12} /> Selesai
+                          </span>
+                        )}
                       </div>
                       <h3 className="font-bold text-text text-sm sm:text-base truncate group-hover:text-primary transition-colors">
                         {materi.title}
@@ -534,7 +565,11 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-base font-bold text-text">Tantangan Harian</h2>
               <span className="text-xs font-bold text-primary px-2 py-0.5 rounded-full bg-primary/10">
-                {completedCount}/{tasks.length} Selesai
+                {isClientReady ? (
+                  `${tasksCompletedCount}/${tasks.length} Selesai`
+                ) : (
+                  <span className="skeleton inline-block h-3 w-16 align-middle" />
+                )}
               </span>
             </div>
 
@@ -546,19 +581,19 @@ export default function DashboardPage() {
             <div className="progress-bar h-2 mb-5">
               <div
                 className="progress-bar-fill transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
+                style={{ width: `${tasksProgressPercent}%` }}
               />
             </div>
 
             {/* Tasks list */}
             <ul className="flex flex-col gap-2.5">
-              {tasks.map((task) => (
+              {isClientReady ? tasks.map((task) => (
                 <li key={task.id}>
                   <label className="flex items-center gap-3 cursor-pointer group select-none p-2 rounded-xl hover:bg-primary/[0.03] transition-colors">
                     <input
                       type="checkbox"
                       checked={task.completed}
-                      onChange={() => toggleTask(task.id)}
+                      onChange={() => handleToggleTask(task.id)}
                       className="sr-only peer"
                     />
                     <span
@@ -580,6 +615,11 @@ export default function DashboardPage() {
                     </span>
                   </label>
                 </li>
+              )) : [0, 1, 2].map((item) => (
+                <li key={item} className="flex items-center gap-3 p-2" aria-hidden="true">
+                  <span className="skeleton w-5 h-5 rounded-lg shrink-0" />
+                  <span className="skeleton h-3 w-3/4" />
+                </li>
               ))}
             </ul>
 
@@ -587,9 +627,9 @@ export default function DashboardPage() {
             <div className="mt-5 pt-4 border-t border-border flex items-center justify-between text-xs text-muted">
               <div className="flex items-center gap-1.5">
                 <Flame size={15} className="text-warning" />
-                <span>Streak: <strong className="text-text">{stats.streak} hari</strong></span>
+                <span>Streak: <strong className="text-text">{streakDays} hari</strong></span>
               </div>
-              {completedCount === tasks.length && (
+              {tasksCompletedCount === tasks.length && tasks.length > 0 && (
                 <span className="text-primary font-bold text-[11px] animate-fade-in">
                   Alhamdulillah tercapai! 🎉
                 </span>
@@ -597,34 +637,53 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* Progres Pemahaman Kategori */}
+          {/* Progres Pemahaman Kategori (Real-time category progress) */}
           <section className="card !p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-text">Progres Kategori</h2>
               <Link
-                href="/profile"
+                href="/belajar"
                 className="text-xs font-semibold text-primary hover:text-primary-light"
               >
                 Lihat Semua
               </Link>
             </div>
 
-            <div className="space-y-3.5">
-              {userProgress.slice(0, 4).map((item) => (
-                <div key={item.category}>
-                  <div className="flex items-baseline justify-between text-xs mb-1 font-medium">
-                    <span className="text-text">{item.category}</span>
-                    <span className="font-bold text-primary">{item.percentage}%</span>
+            {isClientReady && categoryProgress.length > 0 ? (
+              <div className="space-y-3.5">
+                {categoryProgress.slice(0, 4).map((item) => (
+                  <div key={item.category}>
+                    <div className="flex items-baseline justify-between text-xs mb-1 font-medium">
+                      <span className="text-text">{item.category}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-muted">
+                          ({item.completedCount}/{item.totalCount})
+                        </span>
+                        <span className="font-bold text-primary">{item.percentage}%</span>
+                      </div>
+                    </div>
+                    <div className="progress-bar h-1.5">
+                      <div
+                        className="progress-bar-fill"
+                        style={{ width: `${item.percentage}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="progress-bar h-1.5">
-                    <div
-                      className="progress-bar-fill"
-                      style={{ width: `${item.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : isClientReady ? (
+              <div className="rounded-xl bg-background/80 px-4 py-5 text-center">
+                <GraduationCap size={20} className="text-muted mx-auto mb-2" />
+                <p className="text-sm font-semibold text-text">Belum ada progres belajar</p>
+                <p className="text-xs text-muted mt-1">Progres akan muncul setelah kamu mulai membaca materi.</p>
+              </div>
+            ) : (
+              <div className="space-y-3" aria-label="Memuat progres kategori">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className="skeleton h-7 w-full" />
+                ))}
+              </div>
+            )}
 
             <div className="mt-5 pt-4 border-t border-border text-center">
               <Link
@@ -635,6 +694,73 @@ export default function DashboardPage() {
                 <ChevronRight size={13} />
               </Link>
             </div>
+          </section>
+
+          <section className="card !p-6">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-xl bg-secondary/15 text-secondary-dark flex items-center justify-center shrink-0">
+                  <RotateCcw size={19} />
+                </span>
+                <div>
+                  <h2 className="text-base font-bold text-text">Progres Murajaah</h2>
+                  <p className="text-xs text-muted mt-0.5">Target ayat hari ini</p>
+                </div>
+              </div>
+              <Link
+                href="/murajaah"
+                className="text-xs font-semibold text-primary hover:text-primary-light transition-colors"
+              >
+                Buka
+              </Link>
+            </div>
+
+            {isClientReady && murajaahStats ? (
+              <>
+                <div className="flex items-end justify-between gap-3 mb-2">
+                  <p className="text-sm text-text">
+                    <strong className="text-xl text-primary">{murajaahStats.todayVersesTested}</strong>
+                    <span className="text-muted"> / {murajaahStats.dailyTarget} ayat</span>
+                  </p>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted">
+                    <Target size={13} />
+                    {murajaahStats.totalSessions} sesi
+                  </span>
+                </div>
+                <div
+                  className="progress-bar h-2"
+                  role="progressbar"
+                  aria-label="Progres target murajaah hari ini"
+                  aria-valuenow={Math.min(
+                    100,
+                    Math.round(
+                      (murajaahStats.todayVersesTested / Math.max(1, murajaahStats.dailyTarget)) * 100
+                    )
+                  )}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <div
+                    className="progress-bar-fill"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          (murajaahStats.todayVersesTested / Math.max(1, murajaahStats.dailyTarget)) * 100
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+                {murajaahStats.totalSessions === 0 && (
+                  <p className="text-xs text-muted mt-3">
+                    Mulai sesi pertama untuk melihat catatan murajaahmu di sini.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="skeleton h-10 w-full" aria-label="Memuat progres murajaah" />
+            )}
           </section>
         </div>
       </div>

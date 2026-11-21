@@ -36,7 +36,8 @@ export interface HaditsItem {
   bookSlug: string;
   bookName: string;
   arab: string;
-  text: string; // Terjemahan bahasa Indonesia lengkap dengan sanad
+  text: string; // Teks fallback; koleksi Arba'in memakai translation bila tersedia
+  translation?: string; // Terjemahan lengkap untuk koleksi yang menyediakan field terpisah
   matanSnippet?: string; // Cuplikan sabda utama jika tersedia
   narrator: string; // Perawi (Sahabat / Imam)
   source: string; // Format baku, mis. "HR. Bukhari no. 1"

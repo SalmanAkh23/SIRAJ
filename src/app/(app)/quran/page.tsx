@@ -324,13 +324,18 @@ function QuranPageContent() {
         </div>
 
         {mode === "surah" && (
-          <div className="flex items-center gap-1 bg-surface border border-border rounded-[10px] p-1 self-start">
+          <div
+            role="group"
+            className="flex max-w-full items-center gap-1 overflow-x-auto bg-surface border border-border rounded-[10px] p-1 self-start"
+            aria-label="Filter tempat turunnya surah"
+          >
             {filters.map((f) => (
               <button
                 key={f}
                 type="button"
+                aria-pressed={filter === f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 cursor-pointer ${
                   filter === f
                     ? "bg-primary text-white"
                     : "text-muted hover:text-text hover:bg-primary/[0.04]"
@@ -342,6 +347,14 @@ function QuranPageContent() {
           </div>
         )}
       </div>
+
+      {!loading && !errorMessage && (
+        <p className="text-xs text-muted mb-3" aria-live="polite">
+          {mode === "surah"
+            ? `${surahResults.length} surah`
+            : `${juzResults.length} juz ditemukan`}
+        </p>
+      )}
 
       {/* State Loading / Error / Content */}
       {loading ? (
@@ -398,9 +411,9 @@ function QuranPageContent() {
               <Link
                 key={surah.number}
                 href={`/quran/${surah.number}`}
-                className="card group flex items-center gap-4 hover:border-primary/25 transition-all"
+                className="card group flex items-center gap-4 !p-4 sm:!p-5 hover:-translate-y-0.5 hover:border-primary/30 focus-visible:outline-offset-2 transition-all duration-200"
               >
-                <div className="w-11 h-11 rounded-xl bg-primary/[0.06] border border-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
+                <div className="w-11 h-11 rounded-xl bg-primary/[0.06] border border-primary/10 flex items-center justify-center shrink-0 transition-colors duration-200 group-hover:bg-primary group-hover:border-primary">
                   <span className="text-sm font-semibold text-primary group-hover:text-white">
                     {padNumber(surah.number)}
                   </span>

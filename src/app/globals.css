@@ -21,6 +21,24 @@
   --font-quran: var(--font-amiri-quran, var(--font-arabic));
 }
 
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --color-primary: #82b99a;
+  --color-primary-light: #9acbad;
+  --color-primary-dark: #4a795e;
+  --color-secondary: #d6b878;
+  --color-secondary-light: #e4ce99;
+  --color-secondary-dark: #e2c47d;
+  --color-background: #19211d;
+  --color-surface: #232d27;
+  --color-text: #e8eee9;
+  --color-muted: #aab8af;
+  --color-border: #3a4840;
+  --color-success: #55c77a;
+  --color-error: #f27b78;
+  --color-warning: #eab75d;
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -32,10 +50,26 @@
     scroll-behavior: smooth;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
   body {
     font-family: var(--font-sans);
     background-color: var(--color-background);
     color: var(--color-text);
+    transition: background-color 0.18s ease, color 0.18s ease;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -82,8 +116,8 @@
     font-family: var(--font-quran);
     direction: rtl;
     text-align: justify;
-    line-height: 2.4;
-    word-spacing: 0.04em;
+    line-height: 2.55;
+    word-spacing: 0.05em;
   }
 
   .quran-arabic--sm {
@@ -126,13 +160,13 @@
   .card {
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 1.5rem;
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
   }
 
   .card:hover {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 6px 20px rgba(23, 74, 58, 0.045);
   }
 
   .btn-primary {
@@ -146,7 +180,7 @@
     border-radius: 10px;
     font-weight: 500;
     font-size: 0.9375rem;
-    transition: all 0.2s ease;
+    transition: all 0.18s ease;
     border: none;
     cursor: pointer;
     text-decoration: none;
@@ -179,7 +213,7 @@
     border-radius: 10px;
     font-weight: 500;
     font-size: 0.9375rem;
-    transition: all 0.2s ease;
+    transition: all 0.18s ease;
     cursor: pointer;
     text-decoration: none;
   }
@@ -201,7 +235,7 @@
     border-radius: 8px;
     font-weight: 500;
     font-size: 0.875rem;
-    transition: all 0.2s ease;
+    transition: all 0.18s ease;
     cursor: pointer;
   }
 
@@ -218,7 +252,7 @@
     font-size: 0.9375rem;
     color: var(--color-text);
     background-color: var(--color-surface);
-    transition: border-color 0.2s ease;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
   }
 
   .input::placeholder {
@@ -370,12 +404,188 @@
     animation: slideUp 0.5s ease forwards;
   }
 
+  .animate-slide-in-left {
+    animation: slideInLeft 0.18s ease-out forwards;
+  }
+
   @keyframes fadeIn {
     from {
       opacity: 0;
     }
     to {
       opacity: 1;
+    }
+  }
+
+  html[data-theme="dark"] .btn-primary,
+  html[data-theme="dark"] [class~="bg-primary"] {
+    background-color: #2f694c;
+  }
+
+  html[data-theme="dark"] .btn-primary:hover {
+    background-color: #397a59;
+  }
+
+  html[data-theme="dark"] .badge-primary {
+    background-color: rgb(130 185 154 / 14%);
+    color: var(--color-primary);
+  }
+
+  html[data-theme="dark"] .btn-secondary:hover,
+  html[data-theme="dark"] .btn-ghost:hover {
+    background-color: rgb(130 185 154 / 9%);
+  }
+
+  html[data-theme="dark"] .skeleton {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-border) 25%,
+      #344139 50%,
+      var(--color-border) 75%
+    );
+  }
+
+  html[data-theme="dark"] [class~="bg-white"],
+  html[data-theme="dark"] [class~="bg-white/95"],
+  html[data-theme="dark"] [class~="bg-white/90"],
+  html[data-theme="dark"] [class~="bg-white/85"],
+  html[data-theme="dark"] [class~="bg-white/80"] {
+    background-color: var(--color-surface);
+  }
+
+  html[data-theme="dark"] [class~="bg-white/70"] {
+    background-color: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  }
+
+  html[data-theme="dark"] [class~="bg-white/60"] {
+    background-color: color-mix(in srgb, var(--color-surface) 78%, transparent);
+  }
+
+  html[data-theme="dark"] [class~="bg-[#F8F7F2]"],
+  html[data-theme="dark"] [class~="bg-[#FBF9F3]"],
+  html[data-theme="dark"] [class~="bg-[#F5F2E9]"],
+  html[data-theme="dark"] [class~="bg-[#F3EFE4]"],
+  html[data-theme="dark"] [class~="bg-[#F4F2EB]"] {
+    background-color: var(--color-surface);
+  }
+
+  html[data-theme="dark"] [class~="bg-[#F8F7F2]/50"] {
+    background-color: color-mix(in srgb, var(--color-background) 72%, transparent);
+  }
+
+  html[data-theme="dark"] [class~="bg-[#F8F7F2]/60"],
+  html[data-theme="dark"] [class~="bg-[#F8F7F2]/70"] {
+    background-color: color-mix(in srgb, var(--color-background) 84%, transparent);
+  }
+
+  html[data-theme="dark"] [class~="bg-[#ECE9DF]"] {
+    background-color: var(--color-border);
+  }
+
+  html[data-theme="dark"] [class~="bg-[#F0EDE4]"] {
+    background-color: var(--color-border);
+  }
+
+  html[data-theme="dark"] [class~="bg-[#D8D5C8]"],
+  html[data-theme="dark"] [class~="bg-[#E5E3D8]"] {
+    background-color: var(--color-border);
+  }
+
+  html[data-theme="dark"] [class~="bg-[#ECE8DC]"] {
+    background-color: var(--color-background);
+  }
+
+  html[data-theme="dark"] [class*="text-[#263A35]"],
+  html[data-theme="dark"] [class*="text-[#17211D]"],
+  html[data-theme="dark"] [class*="text-[#66736D]"],
+  html[data-theme="dark"] [class*="text-[#718078]"] {
+    color: var(--color-text);
+  }
+
+  html[data-theme="dark"] [class*="text-[#174A3A]"],
+  html[data-theme="dark"] [class~="text-[#245C52]"] {
+    color: var(--color-primary);
+  }
+
+  html[data-theme="dark"] [class~="bg-[#D6B878]"][class*="text-[#17211D]"] {
+    color: #17211d;
+  }
+
+  html[data-theme="dark"] [class~="text-[#B89246]"],
+  html[data-theme="dark"] [class~="text-[#9E7B28]"],
+  html[data-theme="dark"] [class~="text-[#8F7432]"] {
+    color: var(--color-secondary-dark);
+  }
+
+  html[data-theme="dark"] [class~="border-[#E6E3D8]"],
+  html[data-theme="dark"] [class~="border-[#F0EDE4]"],
+  html[data-theme="dark"] [class~="border-[#D8D5C8]"],
+  html[data-theme="dark"] [class~="border-[#E0DDD2]"],
+  html[data-theme="dark"] [class~="border-[#E5E3D8]"],
+  html[data-theme="dark"] [class~="border-[#F4F2EB]"] {
+    border-color: var(--color-border);
+  }
+
+  html[data-theme="dark"] [class~="from-[#FBF9F3]"] {
+    --tw-gradient-from: var(--color-surface) var(--tw-gradient-from-position);
+  }
+
+  html[data-theme="dark"] [class~="via-[#F5EFE2]"] {
+    --tw-gradient-via: var(--color-background) var(--tw-gradient-via-position);
+  }
+
+  html[data-theme="dark"] [class~="to-[#E6EFEA]"] {
+    --tw-gradient-to: var(--color-surface) var(--tw-gradient-to-position);
+  }
+
+  .quran-reader[data-reading-mode="true"] {
+    max-width: 80rem;
+    padding-top: 1.25rem;
+    padding-bottom: 2rem;
+  }
+
+  .quran-reader[data-reading-mode="true"] .quran-reading-content {
+    padding: clamp(1.25rem, 4vw, 3rem);
+    border-color: color-mix(in srgb, var(--color-secondary) 28%, var(--color-border));
+    background-color: color-mix(in srgb, var(--color-surface) 88%, var(--color-secondary) 12%);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .quran-reader[data-reading-mode="true"] [data-reading-hide],
+  .quran-reader[data-reading-mode="true"] .reading-secondary-action {
+    display: none;
+  }
+
+  .quran-reader[data-reading-mode="true"] .quran-arabic {
+    line-height: 2.7;
+  }
+
+  .hadits-reading-panel--active {
+    max-width: 56rem;
+    max-height: 95dvh;
+  }
+
+  .hadits-reading-panel--active .hadits-reading-body {
+    padding: clamp(1.25rem, 4vw, 3rem);
+    gap: 2rem;
+  }
+
+  .hadits-reading-panel--active [data-reading-hide] {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .quran-reader[data-reading-mode="true"] {
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+
+    .quran-reader[data-reading-mode="true"] .quran-reading-content {
+      padding: 1rem 0.75rem;
+    }
+
+    .hadits-reading-panel--active {
+      max-height: calc(100dvh - 1rem);
     }
   }
 
@@ -387,6 +597,17 @@
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+
+    @keyframes slideInLeft {
+      from {
+        opacity: 0;
+        transform: translateX(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
     }
   }
 }

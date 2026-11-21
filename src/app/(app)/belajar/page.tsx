@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { categories, materiList } from "@/data/materi";
 import EmptyState from "@/components/empty-state";
 import {
@@ -10,6 +10,8 @@ import {
   IslamicFooterOrnament,
 } from "@/components/belajar-illustrations";
 import { useBookmarks } from "@/lib/bookmark-context";
+import { useAuth } from "@/lib/auth-context";
+import { readUserLearningData, EVENT_LEARNING_UPDATED } from "@/lib/learning-progress";
 import {
   Heart,
   BookOpen,
@@ -23,6 +25,7 @@ import {
   ChevronRight,
   Sparkles,
   Bookmark,
+  CheckCircle2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -36,10 +39,31 @@ const iconMap: Record<string, LucideIcon> = {
 };
 
 export default function BelajarPage() {
+  const { user } = useAuth();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const materiSectionRef = useRef<HTMLElement | null>(null);
   const { isBookmarked, toggle } = useBookmarks();
+
+  const userEmail = user?.email ?? null;
+  const [learningData, setLearningData] = useState(() => readUserLearningData(userEmail));
+
+  const refreshLearning = useCallback(() => {
+    setLearningData(readUserLearningData(userEmail));
+  }, [userEmail]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sinkronisasi saat user berganti
+    refreshLearning();
+
+    const handleUpdate = () => refreshLearning();
+    window.addEventListener(EVENT_LEARNING_UPDATED, handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener(EVENT_LEARNING_UPDATED, handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, [userEmail, refreshLearning]);
 
   const materiListFiltered = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -377,6 +401,8 @@ export default function BelajarPage() {
               {materiListFiltered.map((materi) => {
                 const bookmarkId = `materi-${materi.id}`;
                 const saved = isBookmarked(bookmarkId);
+                const isCompleted = learningData.completedMateriIds.includes(materi.id);
+                const displayProgress = isCompleted ? 100 : (learningData.materiProgress[materi.id] ?? 0);
 
                 return (
                   <Link
@@ -425,7 +451,7 @@ export default function BelajarPage() {
                     {/* Konten Kartu Pembelajaran */}
                     <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                       <div>
-                        {/* Baris Meta: Badge Kategori & Estimasi Waktu Membaca */}
+                        {/* Baris Meta: Badge Kategori, Waktu Baca & Status Selesai */}
                         <div className="flex flex-wrap items-center gap-2 mb-2.5">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#174A3A]/[0.09] text-[#174A3A] border border-[#174A3A]/15">
                             {materi.category}
@@ -434,6 +460,11 @@ export default function BelajarPage() {
                             <Clock size={12} className="text-[#B89246]" />
                             {materi.readTime} menit membaca
                           </span>
+                          {isCompleted && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#174A3A] text-white">
+                              <CheckCircle2 size={11} className="text-[#D6B878]" /> Selesai
+                            </span>
+                          )}
                         </div>
 
                         {/* Judul Materi */}
@@ -453,16 +484,16 @@ export default function BelajarPage() {
                           <div className="flex-1 h-2 bg-[#ECE9DF] rounded-full overflow-hidden">
                             <div
                               className="h-full rounded-full bg-gradient-to-r from-[#174A3A] via-[#245C52] to-[#D6B878] transition-all duration-500"
-                              style={{ width: `${materi.progress}%` }}
+                              style={{ width: `${displayProgress}%` }}
                               role="progressbar"
-                              aria-valuenow={materi.progress}
+                              aria-valuenow={displayProgress}
                               aria-valuemin={0}
                               aria-valuemax={100}
                               aria-label={`Progres belajar ${materi.title}`}
                             />
                           </div>
                           <span className="text-xs font-bold text-[#263A35] shrink-0 min-w-[32px] text-right">
-                            {materi.progress}%
+                            {displayProgress}%
                           </span>
                         </div>
 

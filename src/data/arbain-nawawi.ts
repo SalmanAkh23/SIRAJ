@@ -60,7 +60,7 @@ export const ARBAIN_METADATA = {
   primarySources: "Kutubut Tis'ah (Shahih Al-Bukhari, Shahih Muslim, Sunan Abu Dawud, Jami' At-Tirmidzi, Sunan An-Nasa'i, Sunan Ibnu Majah, Musnad Ahmad, dll)",
 };
 
-export const arbainHaditsList: ArbainHadits[] = [
+const arbainHaditsSource: ArbainHadits[] = [
   {
     id: "hadits-1",
     number: 1,
@@ -1187,6 +1187,13 @@ export const arbainHaditsList: ArbainHadits[] = [
     bookName: "Arba'in An-Nawawi",
   },
 ];
+
+export const arbainHaditsList: ArbainHadits[] = arbainHaditsSource.map(
+  (hadits) => ({
+    ...hadits,
+    text: hadits.translation,
+  })
+);
 
 /** Ambil seluruh 42 Hadits Arba'in */
 export function getAllArbainHadits(): ArbainHadits[] {

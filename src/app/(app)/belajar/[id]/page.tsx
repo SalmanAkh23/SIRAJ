@@ -2,11 +2,17 @@
 
 import Link from "next/link";
 import { useParams, notFound } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { materiList, getMateriById } from "@/data/materi";
 import MarkdownContent, { extractHeadings } from "@/components/md-content";
 import { MateriThumbnail } from "@/components/belajar-illustrations";
 import { useBookmarks } from "@/lib/bookmark-context";
+import { useAuth } from "@/lib/auth-context";
+import {
+  recordMateriOpened,
+  toggleMateriCompleted,
+  readUserLearningData,
+} from "@/lib/learning-progress";
 import {
   ArrowLeft,
   Bookmark,
@@ -15,6 +21,8 @@ import {
   List,
   ArrowRight,
   Check,
+  CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 
 function TocNav({
@@ -48,8 +56,31 @@ function TocNav({
 export default function MateriDetailPage() {
   const params = useParams<{ id: string }>();
   const materi = getMateriById(params.id);
+  const { user } = useAuth();
   const { isBookmarked, toggle } = useBookmarks();
   const [notice, setNotice] = useState<string | null>(null);
+
+  const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [userProgress, setUserProgress] = useState<number>(0);
+
+  const userEmail = user?.email ?? null;
+
+  // Catat materi dibuka dan muat data progres user terkini
+  const syncUserProgress = useCallback(() => {
+    if (!materi) return;
+    const learningData = readUserLearningData(userEmail);
+    const completed = learningData.completedMateriIds.includes(materi.id);
+    const prog = completed ? 100 : (learningData.materiProgress[materi.id] ?? 25);
+    setIsCompleted(completed);
+    setUserProgress(prog);
+  }, [materi, userEmail]);
+
+  useEffect(() => {
+    if (!materi) return;
+    recordMateriOpened(userEmail, materi.id);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sinkronisasi progres materi user saat dibuka
+    syncUserProgress();
+  }, [materi, userEmail, syncUserProgress]);
 
   useEffect(() => {
     if (!notice) return;
@@ -66,6 +97,17 @@ export default function MateriDetailPage() {
   const bookmarkId = `materi-${materi.id}`;
   const saved = isBookmarked(bookmarkId);
 
+  const handleToggleComplete = () => {
+    const nextState = toggleMateriCompleted(userEmail, materi.id);
+    setIsCompleted(nextState);
+    setUserProgress(nextState ? 100 : 75);
+    if (nextState) {
+      setNotice("Alhamdulillah! Materi telah ditandai selesai.");
+    } else {
+      setNotice("Status materi diubah menjadi sedang dipelajari.");
+    }
+  };
+
   const handleShare = async () => {
     const text = `${materi.title} — belajar bersama SIRAJ`;
     try {
@@ -74,7 +116,7 @@ export default function MateriDetailPage() {
         return;
       }
       await navigator.clipboard.writeText(text);
-      setNotice("Tautan materi disalin.");
+      setNotice("Tautan materi disalin ke papan klip.");
     } catch {
       setNotice("Materi tidak dapat dibagikan saat ini.");
     }
@@ -111,6 +153,11 @@ export default function MateriDetailPage() {
                 <Clock size={14} className="text-[#B89246]" />
                 {materi.readTime} menit membaca
               </span>
+              {isCompleted && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#174A3A] text-white">
+                  <CheckCircle2 size={12} className="text-[#D6B878]" /> Selesai
+                </span>
+              )}
             </div>
 
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#263A35] tracking-tight leading-tight">
@@ -124,17 +171,33 @@ export default function MateriDetailPage() {
               <div className="flex items-center gap-3 min-w-[180px]">
                 <div className="w-28 h-2 bg-white/80 rounded-full overflow-hidden border border-[#D6B878]/30">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#174A3A] to-[#D6B878]"
-                    style={{ width: `${materi.progress}%` }}
+                    className="h-full rounded-full bg-gradient-to-r from-[#174A3A] to-[#D6B878] transition-all duration-500"
+                    style={{ width: `${userProgress}%` }}
                   />
                 </div>
                 <span className="text-xs font-semibold text-[#263A35]">
-                  Progres {materi.progress}%
+                  Progres {userProgress}%
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Tombol Tandai Selesai */}
                 <button
+                  type="button"
+                  onClick={handleToggleComplete}
+                  className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-4 py-2 rounded-xl transition-all shadow-xs ${
+                    isCompleted
+                      ? "bg-[#174A3A] text-white hover:bg-[#174A3A]/90 border border-[#174A3A]"
+                      : "bg-[#D6B878] text-[#174A3A] hover:bg-[#cbb070] border border-[#B89246]"
+                  }`}
+                  aria-pressed={isCompleted}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>{isCompleted ? "Telah Selesai" : "Tandai Selesai"}</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() =>
                     toggle({
                       id: bookmarkId,
@@ -152,7 +215,9 @@ export default function MateriDetailPage() {
                   <Bookmark size={15} fill={saved ? "currentColor" : "none"} />
                   {saved ? "Tersimpan" : "Simpan"}
                 </button>
+
                 <button
+                  type="button"
                   onClick={handleShare}
                   className="btn-secondary bg-white/90 text-sm !py-2 !px-4"
                 >
@@ -165,9 +230,9 @@ export default function MateriDetailPage() {
             {notice && (
               <div
                 role="status"
-                className="mt-4 inline-flex items-center gap-1.5 px-3 py-2 bg-[#174A3A]/[0.08] border border-[#174A3A]/20 rounded-lg text-sm text-[#174A3A] animate-fade-in"
+                className="mt-4 inline-flex items-center gap-2 px-3.5 py-2 bg-[#174A3A]/[0.08] border border-[#174A3A]/20 rounded-xl text-xs sm:text-sm font-medium text-[#174A3A] animate-fade-in"
               >
-                <Check size={14} />
+                <Check size={14} className="text-[#174A3A]" />
                 {notice}
               </div>
             )}
@@ -190,6 +255,30 @@ export default function MateriDetailPage() {
         {/* Article */}
         <article className="max-w-3xl bg-white border border-[#E6E3D8] rounded-2xl p-6 sm:p-8 lg:p-10 shadow-[0_2px_16px_rgba(23,74,58,0.03)]">
           <MarkdownContent content={materi.content} />
+
+          {/* Action Footer di akhir artikel */}
+          <div className="mt-10 pt-6 border-t border-[#E6E3D8] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#F8F7F2]/60 p-5 rounded-2xl border">
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#718078] flex items-center gap-1.5">
+                <Sparkles size={14} className="text-[#D6B878]" /> Evaluasi Pemahaman
+              </span>
+              <p className="text-sm font-bold text-[#263A35] mt-1">
+                Sudah selesai membaca dan memahami materi ini?
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleComplete}
+              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-xs shrink-0 ${
+                isCompleted
+                  ? "bg-[#174A3A] text-white hover:bg-[#174A3A]/90"
+                  : "bg-gradient-to-r from-[#174A3A] to-[#245C52] text-white hover:opacity-95"
+              }`}
+            >
+              <CheckCircle2 size={16} className={isCompleted ? "text-[#D6B878]" : "text-white"} />
+              {isCompleted ? "Materi Sudah Selesai ✓" : "Tandai Selesai"}
+            </button>
+          </div>
         </article>
 
         {/* TOC desktop */}

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import Logo from "@/components/logo";
+import ThemeToggle from "@/components/theme-toggle";
 
 const navLinks = [
   { href: "/", label: "Beranda" },
@@ -48,6 +49,7 @@ export default function Navbar() {
 
           {/* CTA */}
           <div className="hidden md:flex items-center gap-3">
+            <ThemeToggle compact />
             <Link href="/login" className="text-sm font-medium text-muted hover:text-text transition-colors">
               Masuk
             </Link>
@@ -57,13 +59,16 @@ export default function Navbar() {
           </div>
 
           {/* Mobile Hamburger */}
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="md:hidden p-2 text-muted hover:text-text rounded-lg transition-colors"
-            aria-label="Toggle menu"
-          >
-            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
+          <div className="flex items-center gap-1 md:hidden">
+            <ThemeToggle compact />
+            <button
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="p-2 text-muted hover:text-text rounded-lg transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
         </div>
 
         {/* Mobile Menu */}
