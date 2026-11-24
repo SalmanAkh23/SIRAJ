@@ -29,7 +29,28 @@ export async function GET(req: NextRequest) {
     const lngParam = searchParams.get("lng");
     const dateParam = searchParams.get("date"); // YYYY-MM-DD or empty for today
 
-    const now = dateParam ? new Date(dateParam) : new Date();
+    const dateMatch = dateParam
+      ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateParam)
+      : null;
+    const dateParts = dateMatch?.slice(1).map(Number);
+    const hasValidDate = Boolean(
+      dateParts &&
+        dateParts[1] >= 1 &&
+        dateParts[1] <= 12 &&
+        dateParts[2] >= 1 &&
+        dateParts[2] <= 31 &&
+        new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]))
+          .toISOString()
+          .startsWith(dateParam ?? "")
+    );
+    const now = hasValidDate && dateParts
+      ? new Date(
+          dateParts[0],
+          dateParts[1] - 1,
+          dateParts[2],
+          12
+        )
+      : new Date();
     const targetDate = isNaN(now.getTime()) ? new Date() : now;
 
     // Resolve city & coordinates
@@ -55,7 +76,9 @@ export async function GET(req: NextRequest) {
       lng = DEFAULT_CITY.lng;
     }
 
-    const dateKey = targetDate.toISOString().slice(0, 10);
+    const dateKey = hasValidDate && dateParam
+      ? dateParam
+      : targetDate.toISOString().slice(0, 10);
     const cacheKey = `${lat.toFixed(3)}_${lng.toFixed(3)}_${dateKey}`;
 
     const cached = cache.get(cacheKey);

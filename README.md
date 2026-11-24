@@ -14,6 +14,37 @@ npm run start    # jalankan build produksi
 npm run lint     # eslint
 ```
 
+## Suara adzan otomatis
+
+Letakkan rekaman adzan yang Anda miliki atau berlisensi untuk digunakan di
+`public/audio/adzan/subuh.mp3`. Pengaturan suara, volume, dan notifikasi tersedia di
+**Profil → Pengaturan Akun**. Browser dapat meminta interaksi pengguna sebelum
+memutar audio; gunakan tombol **Aktifkan Suara Adzan** untuk menguji dan
+mengizinkan pemutaran.
+
+Di mode development, tombol **Test Adzan** dan **Test Adzan Subuh** di bagian
+pengaturan langsung menguji audio Subuh tanpa menunggu jadwal. Tombol ini tidak
+mengubah jadwal sebenarnya dan tidak tersedia di production.
+
+## PWA dan persiapan Android
+
+SIRAJ menyediakan web app manifest di `src/app/manifest.ts` dan ikon dari logo
+yang sama di `public/logo-192.png` serta `public/logo-512.png`. Di browser yang
+mendukungnya, tombol **Install SIRAJ** membuka prompt instalasi; browser lain
+menampilkan petunjuk untuk menambahkan situs ke layar utama. PWA harus dibuka
+dari HTTPS (Vercel sudah menyediakan HTTPS) atau `localhost`.
+
+Service worker belum digunakan agar jadwal salat, API, dan data akun tidak
+ter-cache secara usang. Saat offline, SIRAJ memberi tahu pengguna bahwa beberapa
+fitur memerlukan koneksi; konten offline belum tersedia.
+
+APK/AAB belum dibuat. Aplikasi Next.js ini memakai API routes dan halaman
+server-rendered, sehingga belum dapat langsung diekspor sebagai aset statis
+untuk dibundel ke Capacitor. Sebelum membuat paket Android dengan web app lokal,
+perlu diputuskan cara memindahkan/menyediakan API dan mengadaptasi halaman
+server-rendered. Alternatif shell WebView yang memuat website Vercel tetap
+bergantung pada internet dan perlu peninjauan autentikasi serta navigasi native.
+
 ## Struktur
 
 ```

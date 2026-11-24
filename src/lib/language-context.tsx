@@ -61,6 +61,16 @@ const translations = {
       selectLanguage: "Pilih bahasa",
       languageDescription: "Gunakan SIRAJ dalam bahasa pilihan Anda.",
     },
+    pwa: {
+      offline: "Anda sedang offline. Beberapa fitur memerlukan koneksi internet.",
+      install: "Install SIRAJ",
+      installDescription: "Tambahkan SIRAJ ke layar utama untuk membukanya seperti aplikasi.",
+      installError: "Prompt install tidak dapat dibuka. Silakan ikuti langkah manual berikut.",
+      android: "Buka menu ⋮ lalu pilih Install app atau Add to Home screen.",
+      apple: "Ketuk tombol Bagikan lalu pilih Add to Home Screen.",
+      desktop: "Pilih ikon install di bilah alamat atau gunakan menu browser.",
+      closeGuide: "Tutup panduan install",
+    },
   },
   en: {
     common: {
@@ -110,6 +120,16 @@ const translations = {
       theme: "Theme",
       selectLanguage: "Select language",
       languageDescription: "Use SIRAJ in your preferred language.",
+    },
+    pwa: {
+      offline: "You are offline. Some features require an internet connection.",
+      install: "Install SIRAJ",
+      installDescription: "Add SIRAJ to your home screen to open it like an app.",
+      installError: "The install prompt could not be opened. Follow these manual steps.",
+      android: "Open the ⋮ menu, then select Install app or Add to Home screen.",
+      apple: "Tap the Share button, then select Add to Home Screen.",
+      desktop: "Select the install icon in the address bar or use the browser menu.",
+      closeGuide: "Close install guide",
     },
   },
 } as const;

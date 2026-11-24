@@ -8,6 +8,7 @@ import Sidebar from "@/components/sidebar";
 import Logo from "@/components/logo";
 import UserAvatar from "@/components/user-avatar";
 import ThemeToggle from "@/components/theme-toggle";
+import AdhanMonitor from "@/components/adhan-monitor";
 import {
   Menu,
   LayoutDashboard,
@@ -58,6 +59,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="flex min-h-screen bg-background">
+      <AdhanMonitor />
       <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col min-h-screen">

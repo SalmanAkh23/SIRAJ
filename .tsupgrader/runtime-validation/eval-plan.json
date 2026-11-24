@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-11-22T17:45:00+07:00",
+  "generatedOnPlatform": "win32",
+  "projectType": "webapp",
+  "setup": [],
+  "assertions": [
+    {
+      "name": "tsc-no-emit",
+      "kind": "process",
+      "command": "npx",
+      "args": ["tsc", "--noEmit"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "tests-pass",
+      "kind": "process",
+      "command": "npm",
+      "args": ["test"],
+      "verificationMethod": "test-results",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "changed-source-lint",
+      "kind": "process",
+      "command": "npx",
+      "args": [
+        "eslint",
+        "src/components/adhan-monitor.tsx",
+        "src/components/adhan-settings.tsx",
+        "src/lib/adhan.ts",
+        "src/lib/adhan.test.ts",
+        "src/app/(app)/profile/page.tsx",
+        "src/app/api/jadwal-salat/route.ts",
+        "src/components/auth-layout.tsx"
+      ],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "production-build",
+      "kind": "process",
+      "command": "npm",
+      "args": ["run", "build"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 600
+    },
+    {
+      "name": "subuh-audio-served",
+      "kind": "http-probe",
+      "startCommand": "npm",
+      "startArgs": [
+        "run",
+        "start",
+        "--",
+        "--hostname",
+        "127.0.0.1",
+        "--port",
+        "3100"
+      ],
+      "url": "http://127.0.0.1:3100/audio/adzan/subuh.mp3",
+      "verificationMethod": "http-status",
+      "expected": "200",
+      "timeoutSeconds": 120
+    }
+  ]
+}

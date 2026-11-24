@@ -42,6 +42,52 @@ import {
 
 const STORAGE_CITY_KEY = "siraj_prayer_city";
 
+function getCityWallTime(now: Date, gmtOffset: number): Date {
+  return new Date(
+    now.getTime() + (gmtOffset * 60 + now.getTimezoneOffset()) * 60_000
+  );
+}
+
+function getDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isSalatTimings(value: unknown): value is SalatTimings {
+  if (!value || typeof value !== "object") return false;
+  const timings = value as Record<string, unknown>;
+  return [
+    "imsak",
+    "subuh",
+    "terbit",
+    "dhuha",
+    "zuhur",
+    "asar",
+    "magrib",
+    "isya",
+  ].every((key) => {
+    const time = timings[key];
+    return (
+      typeof time === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)
+    );
+  });
+}
+
+function getUpdatedLabel(updatedAt: Date, now: Date): string {
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((now.getTime() - updatedAt.getTime()) / 1000)
+  );
+
+  if (elapsedSeconds < 60) return `${elapsedSeconds} detik yang lalu`;
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) return `${elapsedMinutes} menit yang lalu`;
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  return `${elapsedHours} jam yang lalu`;
+}
+
 const PRAYER_ICONS: Record<
   PrayerKey,
   React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>
@@ -95,15 +141,30 @@ export default function JadwalSalatPage() {
   });
 
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
-  const [timings, setTimings] = useState<SalatTimings>(() =>
-    calculatePrayerTimes(
-      new Date(),
+  const [timings, setTimings] = useState<SalatTimings>(() => {
+    const cityTime = getCityWallTime(new Date(), selectedCity.gmtOffset);
+    return calculatePrayerTimes(
+      new Date(cityTime.getFullYear(), cityTime.getMonth(), cityTime.getDate()),
       selectedCity.lat,
       selectedCity.lng,
       selectedCity.gmtOffset
-    )
+    );
+  });
+  const [timingsDateKey, setTimingsDateKey] = useState(() =>
+    getDateKey(getCityWallTime(new Date(), selectedCity.gmtOffset))
   );
-  const [hijri, setHijri] = useState<HijriDate>(() => getHijriDate(new Date()));
+  const [hijriDateKey, setHijriDateKey] = useState(() =>
+    getDateKey(getCityWallTime(new Date(), selectedCity.gmtOffset))
+  );
+  const [hijri, setHijri] = useState<HijriDate>(() =>
+    getHijriDate(getCityWallTime(new Date(), selectedCity.gmtOffset))
+  );
+  const [scheduleResult, setScheduleResult] = useState<{
+    cityId: string;
+    dateKey: string;
+    status: "ready" | "error";
+    updatedAt: Date | null;
+  } | null>(null);
   const [isGpsLoading, setIsGpsLoading] = useState<boolean>(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
@@ -113,24 +174,80 @@ export default function JadwalSalatPage() {
   const [activeTab, setActiveTab] = useState<"hari-ini" | "bulanan" | "dzikir">("hari-ini");
   const [expandedDzikir, setExpandedDzikir] = useState<number | null>(null);
 
-  // Fetch timings when city changes
+  const selectedCityTime = useMemo(
+    () => getCityWallTime(currentTime, selectedCity.gmtOffset),
+    [currentTime, selectedCity.gmtOffset]
+  );
+  const selectedDateKey = useMemo(
+    () => getDateKey(selectedCityTime),
+    [selectedCityTime]
+  );
+  const currentScheduleResult =
+    scheduleResult?.cityId === selectedCity.id &&
+    scheduleResult.dateKey === selectedDateKey
+      ? scheduleResult
+      : null;
+  const currentTimings = useMemo(() => {
+    if (timingsDateKey === selectedDateKey) return timings;
+
+    const [year, month, day] = selectedDateKey.split("-").map(Number);
+    return calculatePrayerTimes(
+      new Date(year, month - 1, day),
+      selectedCity.lat,
+      selectedCity.lng,
+      selectedCity.gmtOffset
+    );
+  }, [selectedCity, selectedDateKey, timings, timingsDateKey]);
+  const currentHijri = useMemo(() => {
+    if (hijriDateKey === selectedDateKey) return hijri;
+    const [year, month, day] = selectedDateKey.split("-").map(Number);
+    return getHijriDate(new Date(year, month - 1, day));
+  }, [hijri, hijriDateKey, selectedDateKey]);
+
+  // Fetch once when the selected city or its local calendar day changes.
   useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
 
     async function fetchTimings() {
       try {
-        const res = await fetch(`/api/jadwal-salat?city=${selectedCity.id}`, {
-          signal: controller.signal,
-        });
-        if (!isMounted) return;
-        if (res.ok) {
-          const data = await res.json();
-          if (data.timings && isMounted) setTimings(data.timings);
-          if (data.hijri && isMounted) setHijri(data.hijri);
+        const res = await fetch(
+          `/api/jadwal-salat?city=${encodeURIComponent(selectedCity.id)}&date=${selectedDateKey}`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) {
+          throw new Error(`Jadwal salat gagal dimuat (${res.status}).`);
         }
+
+        const data = (await res.json()) as {
+          timings?: unknown;
+          hijri?: HijriDate;
+        };
+        if (!isSalatTimings(data.timings)) {
+          throw new Error("Data jadwal salat dari API tidak valid.");
+        }
+        if (!isMounted) return;
+
+        setTimings(data.timings);
+        setTimingsDateKey(selectedDateKey);
+        if (data.hijri) {
+          setHijri(data.hijri);
+          setHijriDateKey(selectedDateKey);
+        }
+        setScheduleResult({
+          cityId: selectedCity.id,
+          dateKey: selectedDateKey,
+          status: "ready",
+          updatedAt: new Date(),
+        });
       } catch {
-        // Fallback calculations already initialized
+        if (!isMounted || controller.signal.aborted) return;
+        setScheduleResult({
+          cityId: selectedCity.id,
+          dateKey: selectedDateKey,
+          status: "error",
+          updatedAt: null,
+        });
       }
     }
 
@@ -140,7 +257,7 @@ export default function JadwalSalatPage() {
       isMounted = false;
       controller.abort();
     };
-  }, [selectedCity.id]);
+  }, [selectedCity.id, selectedDateKey]);
 
   // Live real-time clock (updates every 1000ms)
   useEffect(() => {
@@ -152,8 +269,8 @@ export default function JadwalSalatPage() {
 
   // Compute countdown and prayer states dynamically based on currentTime & timings
   const { nextPrayer, currentPrayer, prayers } = useMemo(() => {
-    return calculateNextPrayer(timings, currentTime);
-  }, [timings, currentTime]);
+    return calculateNextPrayer(currentTimings, selectedCityTime);
+  }, [currentTimings, selectedCityTime]);
 
   // Qibla direction for current city
   const qiblaAngle = useMemo(() => {
@@ -163,9 +280,24 @@ export default function JadwalSalatPage() {
   // Handle City Selection
   const handleSelectCity = (city: IndonesianCity) => {
     setSelectedCity(city);
-    setTimings(
-      calculatePrayerTimes(new Date(), city.lat, city.lng, city.gmtOffset)
+    const cityTime = getCityWallTime(currentTime, city.gmtOffset);
+    const cityDateKey = getDateKey(cityTime);
+    const cityDate = new Date(
+      cityTime.getFullYear(),
+      cityTime.getMonth(),
+      cityTime.getDate()
     );
+    setTimings(
+      calculatePrayerTimes(
+        cityDate,
+        city.lat,
+        city.lng,
+        city.gmtOffset
+      )
+    );
+    setTimingsDateKey(cityDateKey);
+    setHijri(getHijriDate(cityDate));
+    setHijriDateKey(cityDateKey);
     setIsCityModalOpen(false);
     setCitySearchQuery("");
     setGpsError(null);
@@ -219,9 +351,8 @@ export default function JadwalSalatPage() {
 
   // Monthly Schedule Generator (days of current month)
   const monthlySchedule = useMemo(() => {
-    const now = currentTime;
-    const year = now.getFullYear();
-    const month = now.getMonth();
+    const [year, month, day] = selectedDateKey.split("-").map(Number);
+    const now = new Date(year, month - 1, day);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const days = [];
@@ -243,10 +374,10 @@ export default function JadwalSalatPage() {
       });
     }
     return days;
-  }, [currentTime, selectedCity]);
+  }, [selectedDateKey, selectedCity]);
 
   // Time formatter
-  const formattedLiveClock = currentTime.toLocaleTimeString("id-ID", {
+  const formattedLiveClock = selectedCityTime.toLocaleTimeString("id-ID", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -304,142 +435,119 @@ export default function JadwalSalatPage() {
         </div>
       )}
 
-      {/* Top Banner: Tanggal Hijriah, Masehi & Live Clock */}
-      <section className="relative overflow-hidden bg-gradient-to-r from-primary to-primary-light text-white rounded-2xl p-6 sm:p-8 mb-8 shadow-sm">
-        <div
-          className="absolute inset-0 pattern-star opacity-10 pattern-fade pointer-events-none"
-          aria-hidden="true"
-        />
-
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          {/* Hijri & Masehi */}
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-sm rounded-full text-xs font-medium text-secondary-light mb-3">
-              <CalendarDays size={13} />
-              <span>{selectedCity.name}, {selectedCity.province}</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-              <span>{hijri.formatted}</span>
-            </h2>
-            <div className="flex items-center gap-3 mt-1.5 text-white/80 text-sm sm:text-base">
-              <span>{hijri.masehiFormatted}</span>
-              <span className="w-1 h-1 bg-white/40 rounded-full" />
-              <span className="font-arabic text-lg text-secondary-light tracking-wide">
-                {hijri.monthArabic}
-              </span>
-            </div>
+      <section className="mb-6 flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted">
+            <CalendarDays size={14} className="text-primary" />
+            <span>{selectedCity.name}, {selectedCity.province}</span>
           </div>
-
-          {/* Live Clock Pill */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-5 py-3.5 flex flex-col items-center md:items-end w-full md:w-auto">
-            <span className="text-xs uppercase tracking-wider text-white/70 font-medium">
-              Waktu Lokal ({selectedCity.timezone})
+          <h2 className="text-xl font-semibold tracking-tight text-text">
+            {currentHijri.formatted}
+          </h2>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted">
+            <span>{currentHijri.masehiFormatted}</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-arabic text-base text-primary" dir="rtl">
+              {currentHijri.monthArabic}
             </span>
-            <div className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-white mt-0.5">
-              {formattedLiveClock}
-            </div>
           </div>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted sm:justify-end">
+          <Clock size={15} className="text-primary" />
+          <span>Waktu {selectedCity.timezone}</span>
+          <time className="font-mono font-semibold tabular-nums text-text">
+            {formattedLiveClock}
+          </time>
         </div>
       </section>
 
-      {/* Hero: Hitung Mundur Waktu Salat Berikutnya */}
-      <section className="card !p-6 sm:!p-8 mb-8 bg-surface border-border relative overflow-hidden">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          {/* Left: Info Salat Berikutnya */}
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-secondary/15 text-secondary-dark border border-secondary/30">
-                <span className="w-2 h-2 rounded-full bg-secondary-dark animate-pulse" />
-                Salat Berikutnya
-              </span>
-              {currentPrayer && (
-                <span className="text-xs text-muted">
-                  • Sedang berlangsung: <strong className="text-text">{currentPrayer.name}</strong> ({currentPrayer.time})
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-baseline gap-3 mt-1">
-              <h3 className="text-2xl sm:text-3xl font-bold text-text">
-                Menuju {nextPrayer.name}
+      <section
+        aria-labelledby="next-prayer-title"
+        className="mb-8 rounded-2xl border border-primary/20 bg-primary/[0.04] p-5 sm:p-7"
+      >
+        <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-8">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary">
+              Salat Berikutnya
+            </p>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3
+                id="next-prayer-title"
+                key={nextPrayer.key}
+                className="text-3xl font-semibold tracking-tight text-text transition-opacity sm:text-4xl"
+              >
+                {nextPrayer.name}
               </h3>
-              <span className="text-base sm:text-lg font-semibold text-primary">
-                pukul {nextPrayer.time} {selectedCity.timezone}
+              <span className="font-mono text-xl font-semibold tabular-nums text-primary sm:text-2xl">
+                {nextPrayer.time}
+                <span className="ml-1.5 font-sans text-xs font-medium text-muted">
+                  {selectedCity.timezone}
+                </span>
               </span>
             </div>
-
-            <p className="text-xs sm:text-sm text-muted mt-1.5">
+            <p className="mt-1.5 text-sm text-muted">
               {nextPrayer.isTomorrow ? "Salat Subuh esok hari. " : ""}
               {PRAYER_DETAILS[nextPrayer.key].description}
             </p>
-
-            {/* Interval Progress Bar */}
-            <div className="mt-4 max-w-md">
-              <div className="flex justify-between text-xs text-muted mb-1.5 font-medium">
-                <span>Selang Waktu</span>
-                <span>{nextPrayer.progressPercent}% berjalan</span>
-              </div>
-              <div className="h-2 w-full bg-border rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all duration-1000 ease-linear rounded-full"
-                  style={{ width: `${nextPrayer.progressPercent}%` }}
-                />
-              </div>
-            </div>
+            {currentPrayer && (
+              <p className="mt-2 text-xs text-muted">
+                Sedang berlangsung:{" "}
+                <span className="font-semibold text-text">
+                  {currentPrayer.name} ({currentPrayer.time})
+                </span>
+              </p>
+            )}
           </div>
 
-          {/* Right: Big Countdown Digits */}
-          <div className="bg-primary/[0.04] border border-primary/10 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-center shrink-0 w-full lg:w-auto">
-            <span className="text-xs uppercase tracking-wider text-muted font-semibold mb-2 flex items-center gap-1.5">
-              <Clock size={14} className="text-primary" />
-              Sisa Waktu Menuju Salat
-            </span>
-            <div className="flex items-center gap-2 sm:gap-3 text-center">
-              {/* Jam */}
-              <div className="flex flex-col items-center">
-                <div className="w-14 sm:w-16 h-14 sm:h-16 rounded-xl bg-surface border border-border shadow-sm flex items-center justify-center text-2xl sm:text-3xl font-bold font-mono text-primary">
-                  {String(nextPrayer.hours).padStart(2, "0")}
-                </div>
-                <span className="text-[10px] sm:text-xs text-muted uppercase mt-1.5 font-medium">
-                  Jam
-                </span>
-              </div>
-
-              <span className="text-xl sm:text-2xl font-bold text-muted pb-4">:</span>
-
-              {/* Menit */}
-              <div className="flex flex-col items-center">
-                <div className="w-14 sm:w-16 h-14 sm:h-16 rounded-xl bg-surface border border-border shadow-sm flex items-center justify-center text-2xl sm:text-3xl font-bold font-mono text-primary">
-                  {String(nextPrayer.minutes).padStart(2, "0")}
-                </div>
-                <span className="text-[10px] sm:text-xs text-muted uppercase mt-1.5 font-medium">
-                  Menit
-                </span>
-              </div>
-
-              <span className="text-xl sm:text-2xl font-bold text-muted pb-4">:</span>
-
-              {/* Detik */}
-              <div className="flex flex-col items-center">
-                <div className="w-14 sm:w-16 h-14 sm:h-16 rounded-xl bg-surface border border-border shadow-sm flex items-center justify-center text-2xl sm:text-3xl font-bold font-mono text-primary">
-                  {String(nextPrayer.seconds).padStart(2, "0")}
-                </div>
-                <span className="text-[10px] sm:text-xs text-muted uppercase mt-1.5 font-medium">
-                  Detik
-                </span>
-              </div>
-            </div>
+          <div className="sm:min-w-[220px] sm:text-right">
+            <p className="text-xs font-medium text-muted">Waktu tersisa</p>
+            <p
+              aria-label={`${nextPrayer.formattedRemaining} lagi`}
+              className="mt-1 font-mono text-4xl font-semibold tracking-tight tabular-nums text-primary sm:text-5xl"
+            >
+              {nextPrayer.formattedRemaining}
+            </p>
+            <p className="mt-1 text-sm text-muted">lagi</p>
           </div>
         </div>
+
+        <div className="mt-5">
+          <div className="mb-1.5 flex justify-between text-xs text-muted">
+            <span>Menuju waktu salat</span>
+            <span>{nextPrayer.progressPercent}%</span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Waktu menuju salat berikutnya"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={nextPrayer.progressPercent}
+            className="h-1.5 overflow-hidden rounded-full bg-primary/10"
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear"
+              style={{ width: `${nextPrayer.progressPercent}%` }}
+            />
+          </div>
+        </div>
+
+        <p role="status" className="mt-4 text-xs text-muted">
+          {currentScheduleResult?.status === "ready" &&
+          currentScheduleResult.updatedAt
+            ? `Terakhir diperbarui: ${getUpdatedLabel(currentScheduleResult.updatedAt, currentTime)}`
+            : currentScheduleResult?.status === "error"
+              ? "Jadwal API tidak tersedia; menampilkan perhitungan lokal SIRAJ."
+              : "Memuat jadwal salat..."}
+        </p>
       </section>
 
       {/* Tabs: Hari Ini / Bulanan / Doa & Dzikir */}
-      <div className="flex items-center gap-2 border-b border-border mb-6 pb-2">
+      <div className="mb-6 grid grid-cols-3 gap-1 border-b border-border pb-2 sm:flex sm:items-center sm:gap-2">
         <button
           onClick={() => setActiveTab("hari-ini")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+          className={`rounded-lg px-2 py-2 text-center text-xs font-medium transition-colors cursor-pointer sm:px-4 sm:text-sm ${
             activeTab === "hari-ini"
-              ? "bg-primary text-white shadow-sm"
+              ? "bg-primary text-white"
               : "text-muted hover:text-text hover:bg-primary/[0.04]"
           }`}
         >
@@ -447,9 +555,9 @@ export default function JadwalSalatPage() {
         </button>
         <button
           onClick={() => setActiveTab("bulanan")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+          className={`rounded-lg px-2 py-2 text-center text-xs font-medium transition-colors cursor-pointer sm:px-4 sm:text-sm ${
             activeTab === "bulanan"
-              ? "bg-primary text-white shadow-sm"
+              ? "bg-primary text-white"
               : "text-muted hover:text-text hover:bg-primary/[0.04]"
           }`}
         >
@@ -457,9 +565,9 @@ export default function JadwalSalatPage() {
         </button>
         <button
           onClick={() => setActiveTab("dzikir")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+          className={`rounded-lg px-2 py-2 text-center text-xs font-medium transition-colors cursor-pointer sm:px-4 sm:text-sm ${
             activeTab === "dzikir"
-              ? "bg-primary text-white shadow-sm"
+              ? "bg-primary text-white"
               : "text-muted hover:text-text hover:bg-primary/[0.04]"
           }`}
         >
@@ -470,100 +578,92 @@ export default function JadwalSalatPage() {
       {/* Tab Content: Hari Ini */}
       {activeTab === "hari-ini" && (
         <>
-          {/* 5 Kartu Jadwal Salat Fardu */}
+          {/* Jadwal Salat Fardu */}
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-lg font-semibold text-text">
-                Jadwal Salat 5 Waktu
+                Jadwal Salat
               </h3>
               <span className="text-xs text-muted">
                 Metode Kementerian Agama RI (Kemenag)
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <ol className="overflow-hidden rounded-xl border border-border bg-surface divide-y divide-border sm:grid sm:grid-cols-5 sm:divide-x sm:divide-y-0">
               {prayers.map((prayer) => {
                 const Icon = PRAYER_ICONS[prayer.key];
-
-                let cardStyle = "bg-surface border-border hover:border-primary/30";
-                let badgeNode = null;
-
-                if (prayer.isNext) {
-                  cardStyle =
-                    "bg-secondary/5 border-secondary shadow-md ring-2 ring-secondary/30";
-                  badgeNode = (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-secondary text-primary">
-                      Berikutnya
-                    </span>
-                  );
-                } else if (prayer.isCurrent) {
-                  cardStyle =
-                    "bg-primary/[0.04] border-primary shadow-sm ring-2 ring-primary/20";
-                  badgeNode = (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary text-white">
-                      Waktu Ini
-                    </span>
-                  );
-                } else if (prayer.isPassed) {
-                  cardStyle = "bg-surface/80 border-border opacity-75";
-                  badgeNode = (
-                    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted">
-                      <Check size={11} className="text-success" />
-                      Selesai
-                    </span>
-                  );
-                }
+                const stateLabel = prayer.isNext
+                  ? "Berikutnya"
+                  : prayer.isCurrent
+                    ? "Waktu ini"
+                    : prayer.isPassed
+                      ? "Selesai"
+                      : null;
 
                 return (
-                  <div
+                  <li
                     key={prayer.key}
-                    className={`card !p-5 transition-all flex flex-col justify-between ${cardStyle}`}
+                    aria-current={prayer.isCurrent ? "step" : undefined}
+                    className={`min-w-0 ${
+                      prayer.isNext
+                        ? "bg-primary/[0.05] sm:border-t-2 sm:border-t-primary"
+                        : prayer.isCurrent
+                          ? "bg-secondary/[0.07]"
+                          : prayer.isPassed
+                            ? "opacity-60"
+                            : ""
+                    }`}
                   >
-                    <div>
-                      {/* Header Kartu */}
-                      <div className="flex items-start justify-between mb-3">
-                        <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                            prayer.isNext
-                              ? "bg-secondary text-primary font-bold"
-                              : prayer.isCurrent
-                              ? "bg-primary text-white"
-                              : "bg-primary/5 text-primary"
-                          }`}
-                        >
-                          <Icon size={20} strokeWidth={2} />
+                    <div className="flex items-center gap-3 p-4 sm:flex-col sm:items-start sm:gap-3 sm:p-4">
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                          prayer.isNext || prayer.isCurrent
+                            ? "bg-primary text-white"
+                            : "bg-primary/[0.07] text-primary"
+                        }`}
+                      >
+                        <Icon size={17} strokeWidth={1.9} />
+                      </span>
+
+                      <div className="min-w-0 flex-1 sm:w-full sm:flex-none">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="font-semibold text-text">
+                            {prayer.name}
+                          </h4>
+                          {stateLabel && (
+                            <span
+                              className={`shrink-0 text-[10px] font-semibold ${
+                                prayer.isNext || prayer.isCurrent
+                                  ? "text-primary"
+                                  : "text-muted"
+                              }`}
+                            >
+                              {stateLabel}
+                            </span>
+                          )}
                         </div>
-                        {badgeNode}
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+                          <span className="font-arabic" dir="rtl">
+                          {prayer.arabic}
+                          </span>
+                          <span aria-hidden="true">·</span>
+                          <span>{prayer.rakaat} rakaat</span>
+                        </div>
                       </div>
 
-                      {/* Nama Salat & Bahasa Arab */}
-                      <div className="flex items-baseline justify-between mb-1">
-                        <h4 className="font-bold text-text text-base">
-                          {prayer.name}
-                        </h4>
-                        <span className="font-arabic text-muted text-sm" dir="rtl">
-                          {prayer.arabic}
+                      <div className="ml-auto text-right sm:ml-0 sm:w-full sm:border-t sm:border-border/70 sm:pt-3 sm:text-left">
+                        <time className="font-mono text-xl font-semibold tabular-nums text-text sm:text-2xl">
+                        {prayer.time}
+                        </time>
+                        <span className="ml-1.5 text-[10px] font-medium text-muted">
+                          {selectedCity.timezone}
                         </span>
                       </div>
-
-                      <p className="text-[11px] text-muted mb-4">
-                        {prayer.rakaat} Raka&apos;at
-                      </p>
                     </div>
-
-                    {/* Waktu Jam */}
-                    <div className="pt-3 border-t border-border/60 flex items-baseline justify-between">
-                      <span className="text-2xl sm:text-3xl font-extrabold font-mono text-primary tracking-tight">
-                        {prayer.time}
-                      </span>
-                      <span className="text-[11px] text-muted font-medium">
-                        {selectedCity.timezone}
-                      </span>
-                    </div>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ol>
           </div>
 
           {/* Jadwal Tambahan (Imsakiah, Syuruq, Dhuha) & Kiblat */}
@@ -579,7 +679,7 @@ export default function JadwalSalatPage() {
                 <div className="p-3.5 bg-background rounded-xl border border-border">
                   <span className="text-xs text-muted block mb-1">Imsak (Sahur)</span>
                   <div className="text-xl font-bold font-mono text-text">
-                    {timings.imsak}
+                    {currentTimings.imsak}
                   </div>
                   <span className="text-[10px] text-muted mt-0.5 block">
                     10 mnt sebelum Subuh
@@ -589,7 +689,7 @@ export default function JadwalSalatPage() {
                 <div className="p-3.5 bg-background rounded-xl border border-border">
                   <span className="text-xs text-muted block mb-1">Terbit (Syuruq)</span>
                   <div className="text-xl font-bold font-mono text-text">
-                    {timings.terbit}
+                    {currentTimings.terbit}
                   </div>
                   <span className="text-[10px] text-muted mt-0.5 block">
                     Batas akhir Subuh
@@ -599,7 +699,7 @@ export default function JadwalSalatPage() {
                 <div className="p-3.5 bg-background rounded-xl border border-border">
                   <span className="text-xs text-muted block mb-1">Salat Dhuha</span>
                   <div className="text-xl font-bold font-mono text-text">
-                    {timings.dhuha}
+                    {currentTimings.dhuha}
                   </div>
                   <span className="text-[10px] text-muted mt-0.5 block">
                     20 mnt setelah terbit
@@ -675,7 +775,7 @@ export default function JadwalSalatPage() {
               </p>
             </div>
             <div className="text-xs text-muted bg-background px-3 py-1.5 rounded-lg border border-border">
-              Hari ini: <strong className="text-primary">{hijri.formatted}</strong>
+              Hari ini: <strong className="text-primary">{currentHijri.formatted}</strong>
             </div>
           </div>
 

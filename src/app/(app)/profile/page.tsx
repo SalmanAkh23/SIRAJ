@@ -53,6 +53,7 @@ import {
   Languages,
 } from "lucide-react";
 import { useLanguage } from "@/lib/language-context";
+import AdhanSettings from "@/components/adhan-settings";
 
 const PREFS_STORAGE_KEY = "siraj-profile-preferences-v1";
 const QURAN_TRANSLATION_KEY = "siraj-quran-show-translation";
@@ -1300,6 +1301,8 @@ export default function ProfilePage() {
                     />
                   </button>
                 </div>
+
+                <AdhanSettings />
 
                 {/* 5. Preferensi Terjemahan Al-Qur'an */}
                 <div className="p-5 flex items-center justify-between gap-4">
